@@ -1,16 +1,14 @@
-############################################################################################"
-##################  Script from Juliette Archambeau - July 2019      #######################"
-##################         CLEANING PHENOTYPIC DATABASE              #######################"
-############################################################################################"
+############################################################################################################################"
+##################               Script from Juliette Archambeau - February 2021                     #######################"
+##################         Cleaning & formating the phenotypic databased (CLONAPIN)                  #######################"
+############################################################################################################################"
 
 
 # Libraries
-library(readr)
-library(tidyverse)
-library(dplyr)
-library(data.table)
-library(tidyr)
-library(stringr)
+library(readr) # read_csv
+library(dplyr) # %>% select contains mutate bind_rows rename setdiff pull anti_join slice as_tibble group_by n
+library(tidyr) # %>% contains unite as_tibble
+library(stringi) # stri_sub
 
 #                  Import phenotypic data                           ####
 # ====================================================================="

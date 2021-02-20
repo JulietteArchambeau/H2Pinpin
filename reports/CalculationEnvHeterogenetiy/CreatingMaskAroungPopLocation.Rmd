@@ -1,0 +1,413 @@
+---
+title: "Visualization of the buffer areas"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=TRUE,cache.lazy = FALSE)
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=FALSE)
+options(width = 300)
+library(knitr)
+library(reshape2)
+library(dplyr)
+library(leaflet)
+library(tidyverse)
+library(raster)
+library(rgeos)
+library(sf)
+library(kableExtra)
+```
+
+
+Create a dataframe with the population structure and provenance coordinates:
+
+```{r DataframeCoordProvPopStructure, message =F}
+# Provenance coordinates
+data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
+df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
+df <- df[!(df$prov=="ROD"),]
+colnames(df) <- c("prov","longitude","latitude")
+
+# Adding proportion of belonging to each gene pool (population structure)
+gp <- data[!(is.na(data$Q1)),]
+#gp <- gp[!(is.na(gp$height)),]
+gp <- droplevels(gp) %>%
+  group_by(prov) %>% 
+  summarise_at(vars(paste0(rep("Q",6),1:6)), mean)  # %>% mutate_at(2:7,funs(round(., 3))) 
+for (i in 1:length(gp$prov)){
+  gp[i,"mainGP"] <- names(gp[i,2:7])[which.max(apply(gp[i,2:7],MARGIN=2,max))]
+}
+colnames(gp) <- c("prov","gpNA","gpC","gpCS","gpFA","gpIA","gpSES","mainGP")
+
+df <- left_join(df,gp)
+df
+```
+
+
+The buffer zones used in this document have a radius of 5km, 10km, 20km, 50km, 75km and 100km. 
+
+```{r BufferSize}
+buffer.radius <- list(5000,10000,20000,50000,75000,100000) # in meters
+names(buffer.radius) <- c(str_sub(buffer.radius[1:5],1,-4),"100")
+```
+
+
+Creating the buffer zones:
+
+```{r BufferAroundProvenances}
+xyprov <- SpatialPoints(df[,c("longitude","latitude")], proj4string=CRS("+proj=longlat +datum=WGS84"))
+buff5 <- buffer(xyprov,width=buffer.radius[[1]],dissolve=F) # 5km
+buff10 <- buffer(xyprov,width=buffer.radius[[2]],dissolve=F) # 10km
+buff20 <- buffer(xyprov,width=buffer.radius[[3]],dissolve=F) # 20km
+buff50 <- buffer(xyprov,width=buffer.radius[[4]],dissolve=F) # 50km
+buff75 <- buffer(xyprov,width=buffer.radius[[5]],dissolve=F) # 75km
+buff100 <- buffer(xyprov,width=buffer.radius[[6]],dissolve=F) # 100km
+```
+
+Labels of the plots:
+
+```{r LabelsProvPopStructure}
+labels <- sprintf("<strong> %s </strong><br/>Northern Africa: %s <br/>Corsica: %s <br/>Central Spain: %s <br/>French Atlantic: %s <br/>Iberian Atlantic: %s <br/>South-eastern Spain: %s",
+                  df$prov,round(df$gpNA,2), 
+                  round(df$gpC,2),
+                  round(df$gpCS,2),
+                  round(df$gpFA,2),
+                  round(df$gpIA,2),
+                  round(df$gpSES,2)) %>%
+  lapply(htmltools::HTML)
+labelsOnlyProv <- sprintf("<strong> %s </strong><br/>",
+                  df$prov) %>%
+  lapply(htmltools::HTML)
+```
+
+# Using the maritime pine distribution
+
+Load the maritime pine distribution, which is based on the EUFORGEN distribution (http://www.euforgen.org/) and 10 km radius areas around the National Forest Inventory plots with maritime pines. The problem with this is that this distribution is not precise and has no values in one of the two Moroccan populations.
+
+```{r LoadDistri}
+distri <- shapefile("data/PinPinDistri/PinpinDistriEUforgen_NFIplotsBuffer10km.shp")
+plot(distri)
+```
+
+
+```{r VisualizationDistriAndBuffers, fig.height=10,fig.width=10}
+leaflet() %>% 
+  addTiles %>%
+  addPolygons(dat=distri) %>% 
+  addPolygons(data=buff5,fillColor = "transparent",color = "#8E0152") %>% 
+  addPolygons(data=buff10,fillColor = "transparent",color="#C51B7D") %>% 
+  addPolygons(data=buff20,fillColor = "transparent",color = "#DE77AE") %>% 
+  addPolygons(data=buff50,fillColor = "transparent",color="#7FBC41") %>% 
+  addPolygons(data=buff75,fillColor = "transparent",color = "#4D9221") %>% 
+  addPolygons(data=buff100,fillColor = "transparent",color="#276419") %>% 
+  #addCircleMarkers(data=df,~longitude, ~latitude,label = ~htmlEscape(prov),radius = 0.01,color="black",fillOpacity = 1)
+  addCircleMarkers(data=df,~longitude, ~latitude,radius = 0.01,color="black",fillOpacity = 1,
+                     label=labels,labelOptions = labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"),
+                                                              textsize = "15px", direction = "auto"))
+```
+
+
+# Using the forested areas
+
+
+The forested areas are the "Forest Type 2015" of Copernicus. 100 m resolution. https://land.copernicus.eu/pan-european/high-resolution-layers/forests/forest-type-1/status-maps/2015?tab=metadata
+
+The CRS is **EPSG:3035 (ETRS89, LAEA)** (+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs).
+
+## Mask of the forested areas in Europe
+
+We are going to keep the mixed forests and the conifer forests.
+
+Legend:   
+
+  - **0** all non-tree and non-forest areas
+  
+  - **1** broadleaved forest
+  
+  - **2** coniferous forest
+  
+  - **3** mixed forest (only for aggregated 100m layer)
+
+```{r EuForestAreasFromCopernicus, eval=F}
+# Merge the different tiles of Copernicus (100 m resolution)
+rast1 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E20N20/FTY_2015_100m_eu_03035_d02_E20N20.tif")
+rast2 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E30N10/FTY_2015_100m_eu_03035_d02_E30N10.tif")
+rast3 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E30N20/FTY_2015_100m_eu_03035_d02_E30N20.tif")
+rast4 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E40N20/FTY_2015_100m_eu_03035_d02_E40N20.tif")
+
+# Change the CRS of the buffer areas of 20 km radius
+buffer <- spTransform(buff20,crs(rast1))
+
+# Keep only raster values within the 20 km radius around each population location
+rast1 <- mask(rast1,buffer,updatevalue=NA)
+rast2 <- mask(rast2,buffer,updatevalue=NA)
+rast3 <- mask(rast3,buffer,updatevalue=NA)
+rast4 <- mask(rast4,buffer,updatevalue=NA)
+
+
+# Keeping only the conifer forests and the mixed forests
+rast1[!(rast1==2|rast1==3)] <- NA
+rast2[!(rast2==2|rast2==3)] <- NA
+rast3[!(rast3==2|rast3==3)] <- NA
+rast4[!(rast4==2|rast4==3)] <- NA
+
+rast1[rast1==2|rast1==3] <- 1
+rast2[rast2==2|rast2==3] <- 1
+rast3[rast3==2|rast3==3] <- 1
+rast4[rast4==2|rast4==3] <- 1
+
+# Save the rasters:
+writeRaster(rast1,"data/ForestedAreas/ForestedAreasMasks/EuropeMixedForestAreasRast1.tif",overwrite=T)
+writeRaster(rast2,"data/ForestedAreas/ForestedAreasMasks/EuropeMixedForestAreasRast2.tif",overwrite=T)
+writeRaster(rast3,"data/ForestedAreas/ForestedAreasMasks/EuropeMixedForestAreasRast3.tif",overwrite=T)
+writeRaster(rast4,"data/ForestedAreas/ForestedAreasMasks/EuropeMixedForestAreasRast4.tif",overwrite=T)
+```
+
+
+We use  saga version 2.3.1 to combine the tiles together because I did not manage to run the functions `merge` and `mosaic` of the raster package.
+
+
+```{bash, eval=F}
+cd ~/Documents/H2Pinpin/H2Pinpin/data/ForestedAreas/ForestedAreasMasks/
+
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeMixedForestAreasRast1.sgrd -FILES EuropeMixedForestAreasRast1.tif 
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeMixedForestAreasRast2.sgrd -FILES EuropeMixedForestAreasRast2.tif 
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeMixedForestAreasRast3.sgrd -FILES EuropeMixedForestAreasRast3.tif 
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeMixedForestAreasRast4.sgrd -FILES EuropeMixedForestAreasRast4.tif 
+
+saga_cmd grid_tools 3 -GRIDS sagafiles/EuropeMixedForestAreasRast1.sgrd\;sagafiles/EuropeMixedForestAreasRast2.sgrd\;sagafiles/EuropeMixedForestAreasRast3.sgrd\;sagafiles/EuropeMixedForestAreasRast4.sgrd\
+					  -TYPE 7 \
+					  -OVERLAP 1 \
+					  -BLEND_DIST 10.000000 \
+					  -TARGET_OUT_GRID sagafiles/mosaic.sgrd
+					  
+
+gdal_translate -of GTiff sagafiles/mosaic.sdat mosaic.tif
+```
+
+```{r eval=F}
+# Load the mosaic of forested areas tiles
+rast <- raster("data/ForestedAreas/ForestedAreasMasks/mosaic.tif")
+
+# Load a raster of one variable that will be used as a mask
+prc01 <- raster("data/Climate/Raw/B4EST-Climate/1901-1950_CRU/prc01.tif")
+
+# Change the CRS of the buffer areas of 20 km radius
+buffer <- spTransform(buff20,crs(rast))
+
+# Create a mask at 100 m resolution
+prc01_100 <- crop(prc01,extent(rast)) 
+prc01_100 <- raster::resample(prc01_100,rast) 
+prc01_100 <- mask(prc01_100,rast)
+writeRaster(prc01_100,"data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasMask_100m.tif")
+
+# Create a mask at 1000 m resolution
+rast_1000 <- crop(rast,extent(prc01)) 
+rast_1000 <- raster::resample(rast_1000,prc01) 
+prc01_1000 <- mask(prc01,rast_1000 )
+writeRaster(prc01_1000,"data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasMask_1000m.tif")
+```
+
+
+## Mask of the forested areas in Morocco
+
+
+Data downloaded from here: http://www.fao.org/geonetwork/srv/fr/metadata.show?currTab=simple&id=37195
+
+Legend of the LCCCode:
+
+  - 0003 / 0004 = Mosaic cropland vegetation
+  
+  - 0004 // 0003 = Mosaic vegetation / cropland
+  
+  - 0010 = Artficial surfaces and associated areas
+  
+  - 0011 = Bare areas
+  
+  - 11490 // 11494 = Rainfed trees and scrub crops
+  
+  - 11498 = Rainfed cropland
+  
+  - 20049 // 20058 = Sparse vegetation
+  
+  - 20058 = Sparse grassland
+  
+  - **21446 // 21450-121340 / 21454 = Mosaic forest or shrubland/grassland**
+  
+  - 21450 = Closed to open shrubland
+  
+  - **21454 // 21446 // 21450  = Mosaic grassland/forest or shrubland**
+  
+  - 21496 // 21497-15048 = Closed to open broadleaved evergreen or semidecidous forest
+  
+  - 21496-121340 // 21497-129401 = Closed (>40%) broadleaved evergreen or semidecidous forest
+  
+  - 21497-121340 = Closed (>40%) broadleaved decidous forest
+  
+  - **21497-15045 = Closed to open (>15%) mixed broadleaved decidous and needleaved evergreen forest**
+  
+  - **21499-121340 = Closed (>40%) needeleaved evergreen forest**
+  
+  - 21518 = Closed to open broadleaved decidous shrubland
+  
+  - 41638-60686-R2 // 41898-60686-R2 = Closed broadleaved forest or shrubland permanently flooded - brakish water
+  
+  - 6001 = Consolidated bare areas
+  
+  - 6004 = Non - consolidated bare areas
+  
+  - 6020 = Salt hardpans
+  
+  - 7001 // 8001 = Water bodies
+
+```{r MoroccanMask, eval=F}
+# Load the data
+mor <- shapefile("data/ForestedAreas/RawData/Morocco/mar_gc_adg.shp")
+
+# Keep only the needeleaved evergreen forests or mixed forests
+submor <- mor[mor$LCCCode == "21499-121340" |mor$LCCCode == "21497-15045" |mor$LCCCode == "21454 // 21446 // 21450"|
+                mor$LCCCode == "21446 // 21450-121340 / 21454",]
+
+# Change the CRS
+submor <- spTransform(submor,crs(rast))
+
+# Mask with the buffer of 20 km  radius
+submor <-raster::intersect(submor,buffer) 
+
+# Load a raster of one variable that will be used as a mask
+prc01 <- raster("data/Climate/Raw/B4EST-Climate/1901-1950_CRU/prc01.tif")
+
+# Create the mask 
+prc01.mo <- crop(prc01,extent(submor)) 
+prc01.mo <- mask(prc01.mo,submor,updatevalue=NA)
+
+# at 100m resolution
+prc01.mo.100 <- crop(prc01.mo,extent(rast)) # give the same extent and resolution as the raster of the forested areas of Europe
+prc01.mo.100 <- raster::resample(prc01.mo.100,rast) 
+writeRaster(prc01.mo.100,"data/ForestedAreas/ForestedAreasMasks/MoroccoForestedAreasMask_100m.tif")
+
+# Create the mask at 1000m resolution
+prc01.mo.1000 <- crop(prc01.mo,extent(prc01)) # keep the 1000m resolution
+#prc01.mo <- raster::resample(prc01.mo,rast) 
+writeRaster(prc01.mo.1000,"data/ForestedAreas/ForestedAreasMasks/MoroccoForestedAreasMask_1000m.tif")
+```
+
+
+## Merge the masks of Europe and Morocco
+
+
+```{r MergingMasks,eval=F}
+# 100 m resolution 
+prc01.mo <- raster("data/ForestedAreas/ForestedAreasMasks/MoroccoForestedAreasMask_100m.tif")
+prc01.eu <- raster("data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasMask_100m.tif")
+
+prc01.tot <- merge(prc01.eu,prc01.mo)
+writeRaster(prc01.tot,"data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask_100m.tif")
+
+
+# 1000 m resolution 
+prc01.mo <- raster("data/ForestedAreas/ForestedAreasMasks/MoroccoForestedAreasMask_1000m.tif")
+prc01.eu <- raster("data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasMask_1000m.tif")
+
+prc01.tot <- merge(prc01.eu,prc01.mo)
+writeRaster(prc01.tot,"data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask_1000m.tif")
+```
+
+## An example
+
+We will have to these steps for all variables we want to include in the PCA. 
+
+```{r eval=F}
+# Select cells of the climatic variables of interest by applying the mask
+
+# 100 m resolution
+mask <- raster("data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask_100m.tif") # the mask based on prec01
+tmn <- raster("data/Climate/Raw/B4EST-Climate/1901-1950_CRU/tmn07.tif") # the variables we want to apply the mask
+tmn <- crop(tmn,extent(mask)) # same extent between the two rasters
+tmn <- raster::resample(tmn,mask) # same resolution
+tmn <- mask(tmn,mask,updatevalue=NA) # apply the mask
+writeRaster(tmn,"data/Climate/ClimateMaskedByForestedAreas/tmn07_100m.tif")
+
+
+# 1000 m  resolution
+mask <- raster("data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask_1000m.tif")
+tmn <- raster("data/Climate/Raw/B4EST-Climate/1901-1950_CRU/tmn07.tif")
+mask <- crop(mask,extent(tmn)) # same extent between the two rasters
+mask <- raster::resample(mask,tmn) # same resolution
+tmn <- mask(tmn,mask,updatevalue=NA)
+writeRaster(tmn,"data/Climate/ClimateMaskedByForestedAreas/tmn07_1000m.tif")
+```
+
+## Visualization
+
+
+```{r VisualizationForestedAreasBuffer20km, fig.height=10,fig.width=10}
+# 100 m resolution # too heavy I think
+# tmn <- raster("data/Climate/ClimateMaskedByForestedAreas/tmn07_100m.tif")
+# 
+# pal=colorNumeric("Spectral",raster::values(tmn),na.color = "transparent")
+# 
+# leaflet() %>% 
+#   addRasterImage(tmn , colors = pal, opacity = 0.8) %>%
+#   #addPolygons(dat=distri) %>% 
+#   addPolygons(data=buff20,fillColor = "transparent",color = "#DE77AE") %>% 
+#   addCircleMarkers(data=df,~longitude, ~latitude,radius = 0.01,color="black",fillOpacity = 1,
+#                      label=labels,labelOptions = labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"),
+#                                                               textsize = "15px", direction = "auto"))
+
+# 1000 m resolution
+tmn <- raster("data/Climate/ClimateMaskedByForestedAreas/tmn07_1000m.tif")
+pal=colorNumeric("Spectral",raster::values(tmn),na.color = "transparent")
+buffer <- spTransform(buff20,crs(tmn)) # Change the CRS of the buffer areas of 20 km radius
+
+leaflet() %>% 
+  addRasterImage(tmn , colors = pal, opacity = 0.8) %>%
+  #addPolygons(dat=distri) %>% 
+  addPolygons(data=buff20,fillColor = "transparent",color = "#DE77AE") %>% 
+  addCircleMarkers(data=df,~longitude, ~latitude,radius = 0.01,color="black",fillOpacity = 1,
+                     label=labels,labelOptions = labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"),
+                                                              textsize = "15px", direction = "auto"))
+```
+
