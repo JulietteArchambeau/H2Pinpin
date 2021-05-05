@@ -1,0 +1,793 @@
+---
+title: "Phenotypic traits"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=TRUE,cache.lazy = FALSE)
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=FALSE)
+options(width = 300)
+options(knitr.table.format = "latex")
+library(knitr)
+library(dplyr)
+library(tidyverse)
+library(latex2exp)
+library(cowplot)
+library(kableExtra)
+```
+
+
+Sum-up of the traits selected in this study:
+
+  - Height:
+      
+      - In Fundão (Portugal): height in October 2012 when the trees were 20 month old.
+      
+      - In Cabada (Asturias, Spain): height in November 2012 when the trees were 21 month old.
+      
+      - In Pierroton (France):  height in November 2013 when the trees were 25 month old & in November 2018 when the trees were 85 month old.
+    
+  - Phenology:
+      
+      - bud burst (=date of brachybalst emergence) in 2014 in Pierroton
+      
+      - duration of bud burst in 2014 in Pierroton.
+      
+  - Functional traits
+  
+     - $\delta^{13}C$
+     
+     - Surface Leaf Area (SLA)
+
+
+In the document, the plots colored in green correspond to the trait selected in the study.
+
+```{r}
+data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+   dplyr::filter(!(prov=="MAD"))
+```
+
+```{r}
+tibble(Trait=c(rep("Height",4),"Bud burst", "Duration of bud burst","SLA","$\\delta^{13}$C"),
+       
+       "Common garden"=c("Fundão","Cabada",rep("Pierroton",4),rep("Fundão",2)),
+       
+       "Date of measurement" =c("October 2012","November 2012","November 2013", "November 2018", "January 2014", "January 2014", NA,NA),
+       
+       "Tree age"=c(20,21,25,85,27,27,NA,NA),
+       
+       "Unit"=c(rep("mm",4),"°C-day","°C-day","m$^{2}$/kg","‰"),
+       
+       "Trees"=c(length(data$tree[!is.na(data$POR_htoct12)]),  # height Fundão (Portugal) 2012
+                 length(data$tree[!is.na(data$AST_htnov12)]),  # height Cabada (Asturias) 2012
+                 length(data$tree[!is.na(data$BDX_htnov13)]),  # height Pierroton 2013
+                 length(data$tree[!is.na(data$BDX_htnov18)]),  # height Pierroton 2018
+                 length(data$tree[!is.na(data$BDX_s32014)]),   # bud burst Pierroton 2014
+                 length(data$tree[!is.na(data$BDX_dbb2014)]),  # duration bud burst Pierroton 2014
+                 length(data$tree[!is.na(data$POR_SLA)]),      # SLA Fundão 
+                 length(data$tree[!is.na(data$d13C)])),        # delta 13 C Fundão 
+       
+        "Populations" = c(length(unique(data$prov[!is.na(data$POR_htoct12)])), # height Portugal 2012
+                          length(unique(data$prov[!is.na(data$AST_htnov12)])), # height Asturias 2012
+                          length(unique(data$prov[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
+                          length(unique(data$prov[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                          length(unique(data$prov[!is.na(data$BDX_s32014)])),  # bud burst Pierroton 2014
+                          length(unique(data$prov[!is.na(data$BDX_dbb2014)])), # duration bud burst Pierroton 2014
+                          length(unique(data$prov[!is.na(data$POR_SLA)])),     # SLA Fundão 
+                          length(unique(data$prov[!is.na(data$d13C)]))),       # delta 13 C Fundão 
+                          
+        "Clones" = c(length(unique(data$clon[!is.na(data$POR_htoct12)])), # height Portugal 2012
+                     length(unique(data$clon[!is.na(data$AST_htnov12)])), # height Asturias 2012
+                     length(unique(data$clon[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
+                     length(unique(data$clon[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                     length(unique(data$clon[!is.na(data$BDX_s32014)])),  # bud burst Pierroton 2014
+                     length(unique(data$clon[!is.na(data$BDX_dbb2014)])), # duration bud burst Pierroton 2014
+                     length(unique(data$clon[!is.na(data$POR_SLA)])),     # SLA Fundão 
+                     
+                     length(unique(data$clon[!is.na(data$d13C)]))),       # delta 13 C Fundão   
+        "Blocks" = c(length(unique(data$block[!is.na(data$POR_htoct12)])), # height Portugal 2012
+                     length(unique(data$block[!is.na(data$AST_htnov12)])), # height Asturias 2012
+                     length(unique(data$block[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
+                     length(unique(data$block[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                     length(unique(data$block[!is.na(data$BDX_s32014)])),  # bud burst Pierroton 2014
+                     length(unique(data$block[!is.na(data$BDX_dbb2014)])), # duration bud burst Pierroton 2014
+                     length(unique(data$block[!is.na(data$POR_SLA)])),     # SLA Fundão 
+                     length(unique(data$block[!is.na(data$d13C)])))        # delta 13 C Fundão   
+          ) %>% 
+  
+  kable(caption="Table XX of the paper",escape = FALSE) %>%
+  
+  kable_styling(latex_options =c("striped", "hold_position"))
+
+```
+
+
+# Height
+
+
+```{r HeightNAs}
+data %>% dplyr::select(contains("ht")) %>% summary
+```
+
+## Pierroton (France) - November 2013 and 2018
+
+
+```{r BBhistBordeaux, fig.height=10,fig.width=10,warning=F}
+plot_grid(
+ggplot(data, aes(x= BDX_htnov13)) + 
+  geom_histogram(binwidth = 20, fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Height 2013",y="") +
+  annotate("text",x=1500,y=150,label=paste0("Var = ",round(var(data$BDX_htnov13,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_htnov14)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() + 
+  labs(x="Height 2014",y="") +
+  annotate("text",x=2300,y=80,label=paste0("Var = ",round(var(data$BDX_htnov14,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_htnov15)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Height 2015",y="") +
+  annotate("text",x=3000,y=60,label=paste0("Var = ",round(var(data$BDX_htnov15,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_htnov18)) + 
+  geom_histogram(binwidth = 20, fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Height 2018",y="") +
+  annotate("text",x=6500,y=50,label=paste0("Var = ",round(var(data$BDX_htnov18,na.rm=T),2))))
+```
+
+
+```{r BDX2013Height, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=BDX_htnov13, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              # "orangered3", # no MAD in Bordeaux
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2013.png",height=10,width=12)
+```
+
+```{r BDX2018Height, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=BDX_htnov18, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              # "orangered3", # no MAD in Bordeaux
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+p
+ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2018.png",height=10,width=12)
+```
+
+
+## Cabada (Asturias, Spain) - November 2012
+
+
+```{r BBhistCabada, fig.height=10,fig.width=10,warning=F}
+plot_grid(
+ggplot(data, aes(x= AST_htdec11)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() + 
+  labs(x="Height - December 2011",y="") +
+  annotate("text",x=580,y=300,label=paste0("Var = ",round(var(data$BDX_htnov13,na.rm=T),2))),
+
+ggplot(data, aes(x= AST_htnov12)) + 
+  geom_histogram(binwidth = 20, fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Height - November 2012",y="") +
+  annotate("text",x=1200,y=150,label=paste0("Var = ",round(var(data$BDX_htnov14,na.rm=T),2))),
+
+ggplot(data, aes(x= AST_htmar14)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Height - March 2014",y="") +
+  annotate("text",x=2100,y=100,label=paste0("Var = ",round(var(data$BDX_htnov15,na.rm=T),2))))
+```
+
+
+```{r AST2012Height, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=AST_htnov12, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              "orangered3", # no MAD in Bordeaux
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/HeightAsturias2012.png",height=10,width=12)
+```
+
+
+
+## Fundão (Portugal) - October 2012
+
+```{r BBhistFundao, fig.height=10,fig.width=10,warning=F}
+plot_grid(
+ggplot(data, aes(x= POR_htjan12)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() + 
+  labs(x="Height - January 2012",y="") +
+  annotate("text",x=400,y=300,label=paste0("Var = ",round(var(data$POR_htjan12,na.rm=T),2))),
+
+ggplot(data, aes(x= POR_htmay12)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() + 
+  labs(x="Height - May 2012",y="") +
+  annotate("text",x=600,y=150,label=paste0("Var = ",round(var(data$POR_htmay12,na.rm=T),2))),
+
+ggplot(data, aes(x= POR_htoct12)) + 
+  geom_histogram(binwidth = 20,fill="seagreen3") +  
+  theme_bw() +
+  labs(x="Height - October 2012",y="") +
+  annotate("text",x=900,y=100,label=paste0("Var = ",round(var(data$POR_htoct12,na.rm=T),2))),
+
+ggplot(data, aes(x= POR_htmay13)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Height - May 2013",y="") +
+  annotate("text",x=1200,y=100,label=paste0("Var = ",round(var(data$POR_htmay13,na.rm=T),2))))
+```
+
+
+```{r POR2012Height, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=POR_htoct12, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              "orangered3",
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/HeightPortugal2012.png",height=10,width=12)
+```
+
+```{r POR2012Heightbis, fig.height=10,fig.width=12,warning=F,message=F}
+data %>% 
+  drop_na(POR_htoct12) %>% 
+  droplevels() %>% 
+  ggplot(aes(x=POR_htoct12, fill=as.factor(block))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(block)) + 
+  labs(x="",y="") +
+  theme(legend.position = "none")
+```
+
+
+
+
+# Phenology
+
+## bud burst
+
+```{r BBnas}
+data %>% dplyr::select(contains("s3")) %>% summary
+```
+
+There is less missing values in 2015.
+
+```{r BBhist, fig.height=10,fig.width=10,warning=F}
+plot_grid(
+ggplot(data, aes(x= BDX_s32013)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() + 
+  labs(x="Bud burst 2013",y="") +
+  annotate("text",x=1000,y=900,label=paste0("Var = ",round(var(data$BDX_s32013,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_s32014)) + 
+  geom_histogram(binwidth = 20,fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Bud burst 2014",y="") +
+  annotate("text",x=1700,y=750,label=paste0("Var = ",round(var(data$BDX_s32014,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_s32015)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Bud burst 2015",y="") +
+  annotate("text",x=1500,y=1500,label=paste0("Var = ",round(var(data$BDX_s32015,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_s32017)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Bud burst 2017",y="") +
+  annotate("text",x=1200,y=900,label=paste0("Var = ",round(var(data$BDX_s32017,na.rm=T),2))))
+```
+
+
+```{r BDX2014BB, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=BDX_s32014, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              "orangered3",
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/BudBurstPierroton2014.png",height=10,width=12)
+```
+
+
+
+
+
+## duration of bud burst
+
+```{r DBBnas}
+data %>% dplyr::select(contains("dbb")) %>% summary
+```
+
+There is less missing values in 2015.
+
+```{r DBBhist, fig.height=10,fig.width=10,warning=F}
+plot_grid(
+ggplot(data, aes(x= BDX_dbb2013)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() + 
+  labs(x="Duration bud burst 2013",y="") +
+  annotate("text",x=400,y=500,label=paste0("Var = ",round(var(data$BDX_dbb2013,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_dbb2014)) + 
+  geom_histogram(binwidth = 20,fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Duration bud burst 2014",y="") +
+  annotate("text",x=750,y=800,label=paste0("Var = ",round(var(data$BDX_dbb2014,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_dbb2015)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Duration bud burst 2015",y="") +
+  annotate("text",x=900,y=1000,label=paste0("Var = ",round(var(data$BDX_dbb2015,na.rm=T),2))),
+
+ggplot(data, aes(x= BDX_dbb2017)) + 
+  geom_histogram(binwidth = 20) +  
+  theme_bw() +
+  labs(x="Duration bud burst 2017",y="") +
+  annotate("text",x=800,y=750,label=paste0("Var = ",round(var(data$BDX_dbb2017,na.rm=T),2))))
+```
+
+
+```{r BDX2014DBB, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=BDX_dbb2014, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              "orangered3",
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/DurationBudBurstPierroton2014.png",height=10,width=12)
+```
+
+
+
+
+```{r}
+table(data$BDX_s12013,data$BDX_s42013) # In 2013, only 32 trees were both measured at stage s1 and s4.
+table(data$BDX_s12014,data$BDX_s42014)
+table(data$BDX_s12015,data$BDX_s42015)
+table(data$BDX_s12017,data$BDX_s42017)
+```
+
+**We are going to select the bud burst and duration of bud burst of 2014 as there is more phenotypic variation than the other years.**
+
+# Functional traits
+
+## Delta13C
+
+```{r d13C}
+data %>% dplyr::select(contains("d13C")) %>% summary
+```
+
+```{r d13Chist, fig.height=10,fig.width=10,warning=F}
+ggplot(data, aes(x= d13C)) + 
+  geom_histogram(binwidth = 0.1,fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Delta 13 C",y="") +
+  annotate("text",x=-30,y=60,label=paste0("Var = ",round(var(data$d13C,na.rm=T),2)))
+```
+
+```{r PORd13C, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=d13C, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              "orangered3",
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/d13C.png",height=10,width=12)
+```
+
+
+## Surface leaf area
+
+```{r SLA}
+data %>% dplyr::select(contains("SLA")) %>% summary
+```
+
+```{r SLAhist, fig.height=10,fig.width=14,warning=F}
+plot_grid(ggplot(data, aes(x= POR_SLA)) + 
+  geom_histogram(binwidth = 0.1,fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Surface Leaf Area",y="") +
+  annotate("text",x=9,y=130,label=paste0("Var = ",round(var(data$POR_SLA,na.rm=T),2))),
+
+ggplot(data, aes(x= log(POR_SLA))) + 
+  geom_histogram(binwidth = 0.01,fill="seagreen3") +  
+  theme_bw() + 
+  labs(x="Surface Leaf Area",y="") +
+  annotate("text",x=2.05,y=50,label=paste0("Var = ",round(var(log(data$POR_SLA),na.rm=T),2))),
+nrow=1)
+```
+
+
+```{r PORSLA, fig.height=10,fig.width=12,warning=F,message=F}
+p <- ggplot(data, aes(x=POR_SLA, fill=as.factor(prov))) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(prov)) + 
+  scale_fill_manual(values=c("turquoise2",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "turquoise2",
+                              
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "darkorchid3",
+                              "green3",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "turquoise2",
+                              "darkorchid3",
+                              "orangered3",
+                              "navyblue",
+                              "darkorchid3",
+                              
+                              "navyblue",
+                              "green3",
+                              "navyblue",
+                              "gold2",
+                              "gold2",
+                              "navyblue",
+                              
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "darkorchid3",
+                              "turquoise2",
+                              "turquoise2",
+                              
+                              "navyblue",
+                              "orangered3",
+                              "darkorchid3",
+                              "navyblue")) +
+  labs(x="",y="") +
+  theme(legend.position = "none")
+
+p
+ggsave(p,file="figs/ExploratoryAnalyses/PORSLA.png",height=10,width=12)
+```
