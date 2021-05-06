@@ -497,6 +497,18 @@ ggplot(data, aes(x= BDX_s32017)) +
 ```
 
 
+```{r BBhistMean,fig.height=4,fig.width=4}
+data %>% 
+  dplyr::select(BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017) %>% 
+  filter(rowSums(is.na(.)) != ncol(.)) %>% 
+  dplyr::mutate(mean = rowMeans(.,na.rm=T)) %>% 
+  ggplot(aes(x= mean)) + 
+  geom_histogram(binwidth = 15) +  
+  theme_bw() + 
+  labs(x="Mean bud burst over the 4 measurement years",y="")
+```
+
+
 ```{r BDX2014BB, fig.height=10,fig.width=12,warning=F,message=F}
 p <- ggplot(data, aes(x=BDX_s32014, fill=as.factor(prov))) + 
   geom_histogram(alpha=0.7) + 
@@ -585,6 +597,18 @@ ggplot(data, aes(x= BDX_dbb2017)) +
   theme_bw() +
   labs(x="Duration bud burst 2017",y="") +
   annotate("text",x=800,y=750,label=paste0("Var = ",round(var(data$BDX_dbb2017,na.rm=T),2))))
+```
+
+
+```{r DBBhistMean,fig.height=4,fig.width=4}
+data %>% 
+  dplyr::select(BDX_dbb2014,BDX_dbb2015,BDX_dbb2017) %>% 
+  filter(rowSums(is.na(.)) != ncol(.)) %>% 
+  dplyr::mutate(mean = rowMeans(.,na.rm=T)) %>% 
+  ggplot(aes(x= mean)) + 
+  geom_histogram(binwidth = 15) +  
+  theme_bw() + 
+  labs(x="Mean bud burst over the 4 measurement years",y="")
 ```
 
 
