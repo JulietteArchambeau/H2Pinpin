@@ -1,0 +1,1242 @@
+---
+title: "Calculating eight potential drivers of the within-population genetic variation"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+bibliography: references.bibtex
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=TRUE,cache.lazy = FALSE)
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=F)
+options(width = 300)
+library(knitr)      # CRAN v1.26
+library(reshape2)   # CRAN v1.4.4
+library(dplyr)      # CRAN v1.0.0
+library(leaflet)    # CRAN v2.0.3
+library(tidyverse)  # CRAN v1.3.0
+library(raster)     # CRAN v3.3-13
+library(rgeos)      # CRAN v0.5-3
+library(sf)         # CRAN v0.9-4
+library(kableExtra) # CRAN v1.1.0
+library(ggbiplot)   # [github::vqv/ggbiplot] v0.55 # For the PCA
+library(kableExtra) # CRAN v1.1.0
+library(hierfstat)  # CRAN v0.04-22
+library(matrixcalc)
+```
+
+In this document, we calculate 6 variables standing for 6 potential drivers of the within-population genetic variation:
+
+  -  **Population admixture** scores $A$ and $D$. $A$ is the raw proportion of admixture for each population (i.e. the proportion of the population genome coming from "foreign" gene pools). $D$ is a the proportion of admixture weighted by the divergence between the source and sink gene pools, i.e. the proportion of belonging to each source gene pool weighted by the divergence between the source and sink gene pool.
+  
+  - **Climate harshness** indexes $SHM$ (summer heat moisture index) and $EMT$ (extreme minimum temperature).
+  
+  - **Environmental heterogeneity** indexes $EH$ and $EHW$ (4 indexes).
+
+
+***
+
+We extract the provenance coordinates, transform them in a spatial object and extract the population structure data.
+
+```{r DataframeCoordProvPopStructure, message =F}
+# Provenance coordinates
+data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
+df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
+
+# Remove the ROD population because it has no genomic data,
+# and the MAD population because it has only one clone (so the genetic variation can't
+# be estimated)
+df <- df[!(df$prov=="ROD"|df$prov=="MAD"),]
+colnames(df) <- c("prov","longitude","latitude")
+
+# Create a spatial object of the provenance coordinates 
+xyprov <- SpatialPoints(df[,c("longitude","latitude")], 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+# Adding the proportion of belonging to each gene pool (population structure)
+gp <- data[!(is.na(data$Q1)),] %>% 
+  dplyr::select(prov,clon,paste0(rep("Q",6),1:6)) %>% 
+  distinct() %>%  # keep only one row per clone
+  group_by(prov) %>% 
+  summarise_at(vars(paste0(rep("Q",6),1:6)), mean) 
+
+for (i in 1:length(gp$prov)){
+  gp[i,"mainGP"] <- names(gp[i,2:7])[which.max(apply(gp[i,2:7],MARGIN=2,max))]
+  }
+colnames(gp) <- c("prov","gpNA","gpC","gpCS","gpFA","gpIA","gpSES","mainGP")
+
+df <- left_join(df,gp,by="prov")
+```
+
+
+# Population admixture scores
+
+We used estimates from @jaramillo2015molecular, that were obtained using the Bayesian approach available in Structure [@pritchard2000inference]. @jaramillo2015molecular estimated:
+
+  - for each clone, the **proportions of ancestry from each of the six known gene pools** in maritime pine. In the `df` dataset, these proportions are averaged by population and correspond to the columns `gpNA`, `gpC`, `gpCS`, `gpFA`, `gpIA` and `gpSES` (see below).
+  
+  - the **allele frequency divergence of each gene pool from the common ancestral one** (Fk, which should be numerically similar to Fst; Falush et al., 2003):
+  
+![](DivergenceStructureJaramilloCorrea2015.jpeg)
+
+<br/>
+  
+
+First, we assigned each clone to the gene pool that contributed more than 50% ancestry (corresponding to the column `mainGP` in the `df` dataset, averaged by population).
+
+Then, we calculated the two admixture scores as follows:
+
+  - The **population admixture score $A$** corresponds to the proportion of ancestry originating from the "foreign" gene pools. 
+
+  - To obtain the **admixture score $D$**, we weighted the proportions of ancestry originating from the "foreign" gene pools by the allele frequency divergence between the source and sink gene pools, i.e. the sum of the allele frequency divergence of the source and sink gene pools from the common ancestral one.  Thus, the **admixture score $D$** considers both the percentage of ‘foreign’ ancestries and their respective divergence. We developed $D$ considering that some gene pools are more divergent than others and thus may bring higher genetic diversity to an admixed population at the same level of introgression. To check the weights used to calculate $D$, we correlate them with the pairwise $F_{st}$ among gene pools. We also check the correlation between $D$ and $D_{fst}$, i.e. an expected similar index obtained by weighting the proportions of ancestry originating from the "foreign" gene pools by the pairwise $F_{st}$.
+
+$A$ and $D$ values were calculated for each clone and then averaged by population.
+
+## Calculating $A$ and $D$
+
+```{r CalcultingAdmixtureScores}
+# Estimated divergence between each gene pool and the common ancestral one 
+# From Jaramillo-Correa et al. (2015)
+divNA <- 0.5268   # Northern Africa
+divC <- 0.2739    # Corsica
+divCS <- 0.0600   # Central Spain
+divFA <- 0.1374   # French Atlantic
+divIA <- 0.1944   # Iberian Atlantic 
+divSES <- 0.1522  # South-estern Spain
+
+
+df <- df %>% 
+  mutate(mainGP=case_when(mainGP=="Q1"~"gpNA",
+                          mainGP=="Q2"~"gpC",
+                          mainGP=="Q3"~"gpCS",
+                          mainGP=="Q4"~"gpFA",
+                          mainGP=="Q5"~"gpIA",
+                          mainGP=="Q6"~"gpSES"),
+         
+         # Admixture score A:
+         A = case_when(mainGP=="gpNA"~1-gpNA, 
+                       mainGP=="gpC"~1-gpC,
+                       mainGP=="gpCS"~1-gpCS,
+                       mainGP=="gpFA"~1-gpFA,
+                       mainGP=="gpIA"~1-gpIA,
+                       mainGP=="gpSES"~1-gpSES),
+  
+         # Admixture score D:
+         D = case_when(mainGP=="gpNA"~ gpC*(divC+divNA) + gpCS*(divCS+divNA) + gpFA*(divFA+divNA) + gpIA*(divIA+divNA) + gpSES*(divSES+divNA),
+                       mainGP=="gpC"~ gpNA*(divNA+divC) + gpCS*(divCS+divC) + gpFA*(divFA+divC) + gpIA*(divIA+divC) + gpSES*(divSES+divC),
+                       mainGP=="gpCS"~ gpNA*(divNA+divCS) + gpC*(divC+divCS) + gpFA*(divFA+divCS) + gpIA*(divIA+divCS) + gpSES*(divSES+divCS),
+                       mainGP=="gpFA"~ gpNA*(divNA+divFA) + gpC*(divC+divFA) + gpCS*(divCS+divFA) + gpIA*(divIA+divFA) + gpSES*(divSES+divFA),
+                       mainGP=="gpIA"~ gpNA*(divNA+divIA) + gpC*(divC+divIA) + gpCS*(divCS+divIA) + gpFA*(divFA+divIA) + gpSES*(divSES+divIA),
+                       mainGP=="gpSES"~ gpNA*(divNA+divSES) + gpC*(divC+divSES) + gpCS*(divCS+divSES) + gpFA*(divFA+divSES) + gpIA*(divIA+divSES)))
+
+CorAD <- cor(df$A,df$D)
+
+# Show df
+df %>%
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1:2, bold = T)
+```
+
+
+<span style="color: red;">$A$ and $D$ are correlated at `r round(CorAD,2)`.</span>
+
+```{r, eval=F, echo=F}
+# I was not sure if first calculating D on clones and then averaging, 
+# or first averaging and then calculating D on provenances, will be equivalent. 
+
+# to check, here is the same calculated on clones,
+# but at the end, it's the same. 
+gp2 <- data[!(is.na(data$Q1)),] %>% 
+  dplyr::select(prov,clon,paste0(rep("Q",6),1:6)) %>% 
+  distinct() 
+colnames(gp2) <- c("prov","clon","gpNA","gpC","gpCS","gpFA","gpIA","gpSES") 
+
+gp2 <- inner_join(gp2,df[,c("prov","mainGP")]) %>% 
+  dplyr::mutate(D2 = case_when(mainGP=="gpNA"~ gpC*(divC+divNA)+gpCS*(divCS+divNA)+gpFA*(divFA+divNA)+gpIA*(divIA+divNA)+gpSES*(divSES+divNA),
+                       mainGP=="gpC"~ gpNA*(divNA+divC)+gpCS*(divCS+divC)+gpFA*(divFA+divC)+gpIA*(divIA+divC)+gpSES*(divSES+divC),
+                       mainGP=="gpCS"~ gpNA*(divNA+divCS)+gpC*(divC+divCS)+gpFA*(divFA+divCS)+gpIA*(divIA+divCS)+gpSES*(divSES+divCS),
+                       mainGP=="gpFA"~ gpNA*(divNA+divFA)+gpC*(divC+divFA)+gpCS*(divCS+divFA)+gpIA*(divIA+divFA)+gpSES*(divSES+divFA),
+                       mainGP=="gpIA"~ gpNA*(divNA+divIA)+gpC*(divC+divIA)+gpCS*(divCS+divIA)+gpFA*(divFA+divIA)+gpSES*(divSES+divIA),
+                       mainGP=="gpSES"~ gpNA*(divNA+divSES)+gpC*(divC+divSES)+gpCS*(divCS+divSES)+gpFA*(divFA+divSES)+gpIA*(divIA+divSES))) %>% 
+  dplyr::select(-clon) %>% 
+  group_by(prov,mainGP) %>% 
+  summarise_if(is.numeric, mean, na.rm = TRUE)
+gp2
+
+df <- inner_join(df,gp2[,c("prov","D2")])
+cor(df$D,df$D2)
+
+# -------------------------------------------
+
+# Here why it's the same, through an example:
+
+# weights
+wa <- 0.2 # pop a
+wb <- 0.6 # pop b
+
+# proportions of belonging to each gene pool
+a1 <- 0.3 # pop a belonging to gp 1
+a2 <- 0.8 # pop a belonging to gp 2
+a3 <- 0.5 # pop a belonging to gp 3
+b1 <- 0.1 # pop b belonging to gp 1
+b2 <- 0.9 # pop b belonging to gp 2
+b3 <- 0.7  # pop b belonging to gp 3
+
+# pop 1 
+wa*mean(c(a1,a2,a3)) 
+mean(c(wa*a1,wa*a2,wa*a3)) # same
+
+# pop 2
+wb*mean(c(b1,b2,b3)) 
+mean(c(wb*b1,wb*b2,wb*b3)) # same
+```
+
+
+## Calculating $D_{fst}$
+
+We calculate the pairwise $F_{st}$ matrix among gene pools.
+
+```{r, eval=F}
+# Script from /home/juliette/Documents/GenomicOffset/GenomicOffsetPinPin/reports/PreparingGenomicData/CalculatingPairwiseFST.Rmd
+
+# File with the genotype names (clone names)
+geno_names <- read.delim2("../../GenomicOffset/GenomicOffsetPinPin/data/ClonapinBlups523IndPiMASSJuly2019.txt", row.names=1)
+
+# File with the genotype of each clone for each SNP
+geno <- read.csv("../../GenomicOffset/GenomicOffsetPinPin/data/5165snps523genotypesNA.txt", header=FALSE, row.names=1)
+
+# In this file, SNPs have their names, but not the genotypes.
+# head(geno[,1:10])
+
+# Removing the first two columns with allele info (A,T, G or C)
+geno <- geno[,3:dim(geno)[[2]]]
+
+# Give the genotype name for each column of geno
+colnames(geno) <- rownames(geno_names)
+
+# ----
+
+# Preparing genomic data
+geno[geno ==1] <- 12
+geno[geno ==2] <- 22
+geno[geno ==0] <- 11
+geno <- t(geno) # SNps in column and genotypes in row
+
+geno <- geno %>%  
+  as.data.frame() %>% 
+  dplyr::mutate(prov=substr(row.names(geno), 0, 3)) %>% 
+   dplyr::filter(!(prov=="MAD")) %>% 
+  left_join(df[,c("prov","mainGP")],by="prov") %>% 
+  dplyr::select(prov, mainGP, everything())
+
+# Calculate the pairwise Fst with the hierfstat package
+fst <- pairwise.WCfst(geno[,-1],diploid=TRUE)
+saveRDS(fst,file="data/GenomicData/Gp_Fstmatrix.rds")
+```
+
+We first compare the weights used to calculate $D$ and the pairwise $F_{st}$.
+
+```{r CompaWeightsFstDiv, message=F}
+fst <- readRDS(file="data/GenomicData/Gp_Fstmatrix.rds")
+fst[lower.tri(fst,diag = FALSE)] <- NA
+
+DFcomp <-  as.data.frame(fst) %>% 
+  rownames_to_column(var="GP1") %>% 
+  melt(value.name = "fst",variable.name="GP2") %>% 
+  drop_na(fst) %>% 
+  dplyr::mutate(DivGP1 = case_when(GP1=="gpC"~ divC,
+                                   GP1=="gpCS"~divCS,
+                                   GP1=="gpFA"~divFA,
+                                   GP1=="gpIA"~divIA,
+                                   GP1=="gpNA"~divNA),
+                                 DivGP2 = case_when(GP2=="gpCS"~divCS,
+                                   GP2=="gpFA"~divFA,
+                                   GP2=="gpIA"~divIA,
+                                   GP2=="gpSES"~divSES,
+                                   GP2=="gpNA"~divNA),
+                                 DivTot=DivGP1+DivGP2) 
+CorDivTotfst <- cor(DFcomp$DivTot,DFcomp$fst)
+
+DFcomp %>%
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1:2, bold = T)
+```
+
+
+<span style="color: red;">Weights used to calculate $D$ and the pairwise $F_{st}$ are correlated at `r round(CorDivTotfst,2)`.</span>
+
+```{r CompaDDfst, message=F}
+DFfst <- readRDS(file="data/GenomicData/Gp_Fstmatrix.rds") %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var="GP1") %>% 
+  melt(value.name = "fst",variable.name="GP2") %>% 
+  drop_na(fst)
+
+df <- df %>% mutate(Dfst = case_when(mainGP=="gpNA"~ gpC*DFfst[DFfst$GP1=="gpC"&DFfst$GP2=="gpNA","fst"] +
+                                       gpCS*DFfst[DFfst$GP1=="gpCS"&DFfst$GP2=="gpNA","fst"] + 
+                                       gpFA*DFfst[DFfst$GP1=="gpFA"&DFfst$GP2=="gpNA","fst"] + 
+                                       gpIA*DFfst[DFfst$GP1=="gpIA"&DFfst$GP2=="gpNA","fst"] + 
+                                       gpSES*DFfst[DFfst$GP1=="gpSES"&DFfst$GP2=="gpNA","fst"],
+                       mainGP=="gpC"~ gpNA*DFfst[DFfst$GP1=="gpNA"&DFfst$GP2=="gpC","fst"]+ 
+                                       gpCS*DFfst[DFfst$GP1=="gpCS"&DFfst$GP2=="gpC","fst"] + 
+                                       gpFA*DFfst[DFfst$GP1=="gpFA"&DFfst$GP2=="gpC","fst"] + 
+                                       gpIA*DFfst[DFfst$GP1=="gpIA"&DFfst$GP2=="gpC","fst"] + 
+                                       gpSES*DFfst[DFfst$GP1=="gpSES"&DFfst$GP2=="gpC","fst"],
+                       mainGP=="gpCS"~ gpNA*DFfst[DFfst$GP1=="gpNA"&DFfst$GP2=="gpCS","fst"] + 
+                                       gpC*DFfst[DFfst$GP1=="gpC"&DFfst$GP2=="gpCS","fst"] + 
+                                       gpFA*DFfst[DFfst$GP1=="gpFA"&DFfst$GP2=="gpCS","fst"] + 
+                                       gpIA*DFfst[DFfst$GP1=="gpIA"&DFfst$GP2=="gpCS","fst"] + 
+                                       gpSES*DFfst[DFfst$GP1=="gpSES"&DFfst$GP2=="gpCS","fst"],
+                       mainGP=="gpFA"~ gpNA*DFfst[DFfst$GP1=="gpNA"&DFfst$GP2=="gpFA","fst"] + 
+                                       gpC*DFfst[DFfst$GP1=="gpC"&DFfst$GP2=="gpFA","fst"] +
+                                       gpCS*DFfst[DFfst$GP1=="gpCS"&DFfst$GP2=="gpFA","fst"] + 
+                                       gpIA*DFfst[DFfst$GP1=="gpIA"&DFfst$GP2=="gpFA","fst"] + 
+                                       gpSES*DFfst[DFfst$GP1=="gpSES"&DFfst$GP2=="gpFA","fst"],
+                       mainGP=="gpIA"~ gpNA*DFfst[DFfst$GP1=="gpNA"&DFfst$GP2=="gpIA","fst"] + 
+                                       gpC*DFfst[DFfst$GP1=="gpC"&DFfst$GP2=="gpIA","fst"] + 
+                                       gpCS*DFfst[DFfst$GP1=="gpCS"&DFfst$GP2=="gpIA","fst"] + 
+                                       gpFA*DFfst[DFfst$GP1=="gpFA"&DFfst$GP2=="gpIA","fst"] + 
+                                       gpSES*DFfst[DFfst$GP1=="gpSES"&DFfst$GP2=="gpIA","fst"],
+                       mainGP=="gpSES"~ gpNA*DFfst[DFfst$GP1=="gpNA"&DFfst$GP2=="gpSES","fst"] + 
+                                       gpC*DFfst[DFfst$GP1=="gpC"&DFfst$GP2=="gpSES","fst"] + 
+                                       gpCS*DFfst[DFfst$GP1=="gpCS"&DFfst$GP2=="gpSES","fst"] + 
+                                       gpFA*DFfst[DFfst$GP1=="gpFA"&DFfst$GP2=="gpSES","fst"]+ 
+                                       gpIA*DFfst[DFfst$GP1=="gpIA"&DFfst$GP2=="gpSES","fst"]))
+
+CorDDfst <- cor(df$D,df$Dfst)
+CorADfst <- cor(df$A,df$Dfst)
+
+# Show df
+df %>%
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+<span style="color: red;">$A$ and $D_{fst}$ are correlated at `r round(CorADfst,2)` and $D$ and $D_{fst}$ at `r round(CorDDfst,2)`.</span>
+
+# Environmental heterogeneity
+
+## Visualization buffer areas + maritime pine distribution
+
+For visualization, we create different potential buffer zones around the location of the populations, respectively with a radius of 5km, 10km, 20km, 50km, 75km and 100km. 
+
+```{r BufferSize}
+buff1 <- buffer(xyprov,width=1000,dissolve=F) # 1km
+buff5 <- buffer(xyprov,width=5000,dissolve=F) # 5km
+buff10 <- buffer(xyprov,width=10000,dissolve=F) # 10km
+buff20 <- buffer(xyprov,width=20000,dissolve=F) # 20km
+buff50 <- buffer(xyprov,width=50000,dissolve=F) # 50km
+buff75 <- buffer(xyprov,width=75000,dissolve=F) # 75km
+buff100 <- buffer(xyprov,width=100000,dissolve=F) # 100km
+```
+
+We will project the buffer zones with the **maritime pine distribution**, which is based on the EUFORGEN distribution (http://www.euforgen.org/) and 10-km radius areas around the National Forest Inventory plots with maritime pines (only for Europe). The problem with using this distribution for further analyses is that it is not precise, including non-forested areas and not including the TAM population (Moroccan population). That's why we will not use it in further analyses, and we will use raster of forested areas instead.
+
+```{r LoadDistri,eval=T}
+# Maritime pine distribution from EUFORGEN and the National Forest Inventories
+distri <- shapefile("data/PinPinDistri/PinpinDistriEUforgen_NFIplotsBuffer10km.shp")
+```
+
+
+> Map of the buffer zones + maritime pine distribution
+
+
+```{r LabelsProvPopStructure, fig.height=8,fig.width=8, echo=F, eval=F}
+# Labels of the plots for the `leaflet` package
+labels <- sprintf("<strong> %s </strong><br/>Northern Africa: %s <br/>Corsica: %s <br/>Central Spain: %s <br/>French Atlantic: %s <br/>Iberian Atlantic: %s <br/>South-eastern Spain: %s",
+                  df$prov,round(df$gpNA,2), 
+                  round(df$gpC,2),
+                  round(df$gpCS,2),
+                  round(df$gpFA,2),
+                  round(df$gpIA,2),
+                  round(df$gpSES,2)) %>%
+  lapply(htmltools::HTML)
+labelsOnlyProv <- sprintf("<strong> %s </strong><br/>",
+                  df$prov) %>%
+  lapply(htmltools::HTML)
+
+leaflet() %>% 
+  addTiles %>%
+  addPolygons(dat=distri) %>% 
+  addPolygons(data=buff1,fillColor = "transparent",color = "#8E0152") %>% 
+  addPolygons(data=buff5,fillColor = "transparent",color = "#8E0152") %>% 
+  addPolygons(data=buff10,fillColor = "transparent",color="#C51B7D") %>% 
+  addPolygons(data=buff20,fillColor = "transparent",color = "#DE77AE") %>% 
+  addPolygons(data=buff50,fillColor = "transparent",color="#7FBC41") %>% 
+  addPolygons(data=buff75,fillColor = "transparent",color = "#4D9221") %>% 
+  addPolygons(data=buff100,fillColor = "transparent",color="#276419") %>% 
+  #addCircleMarkers(data=df,~longitude, ~latitude,label = ~htmlEscape(prov),radius = 0.01,color="black",fillOpacity = 1)
+  addCircleMarkers(data=df,~longitude, ~latitude,radius = 0.01,color="black",fillOpacity = 1,
+                     label=labels,labelOptions = labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"),
+                                                              textsize = "15px", direction = "auto"))
+```
+
+In the article and the rest of the document, we will use the **buffer areas of 20-km radius**.
+
+
+
+## Creating a mask of the forested areas
+
+```{r VariableUsedForExtentResolutionOfTheMask, eval=F}
+# Load a raster of one variable that will be used to set the resolution and extent of the mask
+# Here precipitation in January with resolution 1000m 
+prc01 <- raster("data/Climate/Raw/FromMarta_B4ESTClimate/1901-1950_CRU/prc01.tif")
+```
+
+
+### In Europe
+
+The forested areas are the "Forest Type 2015" of Copernicus. **100 m resolution**. https://land.copernicus.eu/pan-european/high-resolution-layers/forests/forest-type-1/status-maps/2015?tab=metadata
+
+The CRS is **EPSG:3035 (ETRS89, LAEA)** (+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs).
+
+We keep all the forested areas, so broadleaved forests (1), coniferous forests (2) and mixed forests (3).
+
+Legend:   
+
+  - **0** all non-tree and non-forest areas
+  
+  - **1** broadleaved forest
+  
+  - **2** coniferous forest
+  
+  - **3** mixed forest (only for aggregated 100m layer)
+
+```{r EuForestAreasFromCopernicus, eval=F}
+# Merge the different tiles of Copernicus (100 m resolution)
+rast1 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E20N20/FTY_2015_100m_eu_03035_d02_E20N20.tif")
+rast2 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E30N10/FTY_2015_100m_eu_03035_d02_E30N10.tif")
+rast3 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E30N20/FTY_2015_100m_eu_03035_d02_E30N20.tif")
+rast4 <- raster("data/ForestedAreas/RawData/Europe/FTY_2015_100m_eu_03035_d02_E40N20/FTY_2015_100m_eu_03035_d02_E40N20.tif")
+
+# Change the CRS of the buffer areas of 20-km radius in CRS ETRS89-LAEA Europe
+buffer <- spTransform(buff20,crs(rast1))
+
+# Keep only raster values within the 20-km radius around each population location
+rast1 <- mask(rast1,buffer,updatevalue=NA)
+rast2 <- mask(rast2,buffer,updatevalue=NA)
+rast3 <- mask(rast3,buffer,updatevalue=NA)
+rast4 <- mask(rast4,buffer,updatevalue=NA)
+
+
+# We keep cells with forested areas, so either broadleaved forests (1), conifer forests (2) or mixed forests (3).
+# For that, we attribute 1 to cells with forested areas and 0 to others.
+
+rast1[!(rast1==2|rast1==3|rast1==1)] <- NA
+rast2[!(rast2==2|rast2==3|rast2==1)] <- NA
+rast3[!(rast3==2|rast3==3|rast3==1)] <- NA
+rast4[!(rast4==2|rast4==3|rast4==1)] <- NA
+
+rast1[rast1==2|rast1==3|rast1==1] <- 1
+rast2[rast2==2|rast2==3|rast2==1] <- 1
+rast3[rast3==2|rast3==3|rast3==1] <- 1
+rast4[rast4==2|rast4==3|rast4==1] <- 1
+
+# Save the rasters:
+writeRaster(rast1,"data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasRast1.tif",overwrite=T)
+writeRaster(rast2,"data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasRast2.tif",overwrite=T)
+writeRaster(rast3,"data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasRast3.tif",overwrite=T)
+writeRaster(rast4,"data/ForestedAreas/ForestedAreasMasks/EuropeForestAreasRast4.tif",overwrite=T)
+```
+
+
+We use  saga version 2.3.1 to combine the tiles together because I did not manage to run the functions `merge` and `mosaic` of the raster package.
+
+
+```{bash, eval=F}
+cd ~/Documents/H2Pinpin/H2Pinpin/data/ForestedAreas/ForestedAreasMasks/
+
+# Change the file format so that it can be used by SAGA
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeForestAreasRast1.sgrd -FILES EuropeForestAreasRast1.tif 
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeForestAreasRast2.sgrd -FILES EuropeForestAreasRast2.tif 
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeForestAreasRast3.sgrd -FILES EuropeForestAreasRast3.tif 
+saga_cmd io_gdal 0 -GRIDS sagafiles/EuropeForestAreasRast4.sgrd -FILES EuropeForestAreasRast4.tif 
+
+# Merging the files (mosaic)
+saga_cmd grid_tools 3 -GRIDS sagafiles/EuropeForestAreasRast1.sgrd\;sagafiles/EuropeForestAreasRast2.sgrd\;sagafiles/EuropeForestAreasRast3.sgrd\;sagafiles/EuropeForestAreasRast4.sgrd\
+					  -TYPE 7 \
+					  -OVERLAP 1 \
+					  -BLEND_DIST 10.000000 \
+					  -TARGET_OUT_GRID sagafiles/EuropeForestAreas.sgrd
+					  
+# from format sgrd (SAGA format) to tif
+gdal_translate -of GTiff sagafiles/EuropeForestAreas.sdat EuropeForestAreas.tif
+```
+
+```{r eval=F}
+# Load the mosaic of forested areas tiles
+rast <- raster("data/ForestedAreas/ForestedAreasMasks/EuropeForestAreas.tif")
+
+# Create a mask at 1000 m resolution and CRS ETRS89-LAEA Europe
+eu.mask <- crop(rast,extent(prc01)) 
+eu.mask <- raster::resample(eu.mask,prc01) 
+eu.mask <- mask(prc01,eu.mask)
+```
+
+
+### In Morocco
+
+
+Data downloaded from here: http://www.fao.org/geonetwork/srv/fr/metadata.show?currTab=simple&id=37195
+
+Legend of the LCCCode:
+
+  - **0003 / 0004 = Mosaic cropland vegetation**
+  
+  - **0004 // 0003 = Mosaic vegetation / cropland**
+  
+  - 0010 = Artficial surfaces and associated areas
+  
+  - 0011 = Bare areas
+  
+  - 11490 // 11494 = Rainfed trees and scrub crops
+  
+  - 11498 = Rainfed cropland
+  
+  - 20049 // 20058 = Sparse vegetation
+  
+  - 20058 = Sparse grassland
+  
+  - **21446 // 21450-121340 / 21454 = Mosaic forest or shrubland/grassland**
+  
+  - **21450 = Closed to open shrubland**
+  
+  - **21454 // 21446 // 21450  = Mosaic grassland/forest or shrubland**
+  
+  - **21496 // 21497-15048 = Closed to open broadleaved evergreen or semidecidous forest**
+  
+  - **21496-121340 // 21497-129401 = Closed (>40%) broadleaved evergreen or semidecidous forest**
+  
+  - **21497-121340 = Closed (>40%) broadleaved decidous forest**
+  
+  - **21497-15045 = Closed to open (>15%) mixed broadleaved decidous and needleaved evergreen forest**
+  
+  - **21499-121340 = Closed (>40%) needeleaved evergreen forest**
+  
+  - **21518 = Closed to open broadleaved decidous shrubland**
+  
+  - 41638-60686-R2 // 41898-60686-R2 = Closed broadleaved forest or shrubland permanently flooded - brakish water
+  
+  - 6001 = Consolidated bare areas
+  
+  - 6004 = Non - consolidated bare areas
+  
+  - 6020 = Salt hardpans
+  
+  - 7001 // 8001 = Water bodies
+  
+<span style="color: red;">We selected cells with the codes in bold.</span>
+
+
+```{r MoroccanMask, eval=F}
+# Load the data
+mor <- shapefile("data/ForestedAreas/RawData/Morocco/mar_gc_adg.shp")
+
+# Keep only the forested areas:
+submor <- mor[mor$LCCCode == "21499-121340" |
+              mor$LCCCode == "21497-15045" |
+              mor$LCCCode == "21454 // 21446 // 21450" |
+              mor$LCCCode == "21497-121340" |
+              mor$LCCCode == "21496 // 21497-15048" |
+              mor$LCCCode == "21496-121340 // 21497-129401" |
+              mor$LCCCode == "21446 // 21450-121340 / 21454" |
+              mor$LCCCode == "21450" | # added
+              mor$LCCCode == "0003 / 0004" | # added
+              mor$LCCCode == "0004 // 0003" | # added
+              mor$LCCCode == "21518",] # added
+
+# Change the CRS
+submor <- spTransform(submor,crs(rast)) # rast is EuropeForestAreas.tif with CRS ETRS89-LAEA Europe
+
+# Change the CRS of the buffer areas of 20 km radius to the CRS ETRS89-LAEA Europe
+buffer <- spTransform(buff20,crs(rast))
+
+# intersection with the 20-km buffer
+submor <- gIntersection(submor,buffer, byid=TRUE)
+plot(out, col="green", bg="white")
+plot(xyprov,add=T)
+
+# Create the Moroccan mask at 1000m resolution
+mor.mask <- crop(prc01,extent(submor)) 
+mor.mask <- mask(mor.mask,submor,updatevalue=NA)
+
+plot(mor.mask)
+plot(xyprov,add=T)
+```
+
+
+### Merge masks of Europe and Morocco
+
+```{r MergingMasks,eval=F}
+mask <- merge(eu.mask,mor.mask)
+writeRaster(mask,"data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask.tif",overwrite=T)
+```
+
+## Extracting env. variables in the 20-km radius
+
+```{r Mask}
+mask <- raster("data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask.tif") # the mask based on prec01
+
+# We create a dataframe with the non-NAs values of the mask
+val <- getValues(mask) 
+n.val <- length(val)
+tab <- tibble(cell.num=1:n.val,mask.values=val) %>% drop_na(mask.values) %>% dplyr::select(-mask.values)
+```
+
+
+**Annual climatic indices**:
+
+  - $EMT$: Extreme minimum temperature over the period considered (1901-1950) (°C)
+  
+  - $SHM$: Summer heat moisture index (°C/mm)
+  
+  - $PRCsum$: Mean summer precipitation (mm)
+  
+  - $SPR$: Mean spring precipitation (mm)
+  
+  - $MWMT$: Mean Warmest Month Temperature (°C)
+  
+  - $MCMT$: Mean Coldest Month Temperature (°C)
+  
+  - $TD$: Temperature difference,	Celsius degrees (°C) 	$MWMT-MCMT$
+
+```{r ExtractingAnnualClimaticIndices, eval=F}
+vars <- c("EMT","MCMT","MWMT","PRCsum","SHM","SPR","TD") # annual indices to extract
+
+for(i in vars){
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",i,".tif"))
+#rast.var <- crop(rast.var,extent(mask)) # no need, same extent between the two rasters
+#rast.var <- raster::resample(rast.var,mask) # no need, same resolution
+rast.var <- mask(rast.var,mask,updatevalue=NA) # apply the mask
+rast.values <- getValues(rast.var) 
+tab.vars <- tibble(cell.num=1:length(rast.values),values=rast.values) %>% drop_na(values)
+colnames(tab.vars)[2] <- i
+tab <- full_join(tab,tab.vars,by="cell.num")
+}
+
+sapply(tab, function(x) sum(is.na(x))) # no NAs 
+```
+
+**Monthly indices (12 variables)**:
+
+  - $MinT_{m}$: Monthly minimum temperature (°C)
+  
+  - $MaxT_{m}$: Monthly maximum temperature (°C)
+  
+  - $Prec_{m}$: Monthly total precipitation (mm)
+  
+  - $CMD_{m}$: Hargreaves climatic moisture deficit (mm)
+
+```{r ExtractingMonthlyClimaticIndices, eval=F}
+vars <- list.files(path="data/Climate/Raw/FromMaurizio/MonthlyIndices",pattern=".tif")
+vars <- vars[-grep("PET",vars)] # remove monthly PET
+vars <- str_sub(vars,1,-5) # extract variable names
+
+for(i in vars){
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/MonthlyIndices/",i,".tif"))
+#rast.var <- crop(rast.var,extent(mask)) # no need, same extent between the two rasters
+#rast.var <- raster::resample(rast.var,mask) # no need, same resolution
+rast.var <- mask(rast.var,mask,updatevalue=NA) # apply the mask
+
+rast.values <- getValues(rast.var) 
+tab.vars <- tibble(cell.num=1:length(rast.values),values=rast.values) %>% drop_na(values)
+colnames(tab.vars)[2] <- i
+tab <- full_join(tab,tab.vars,by="cell.num")
+}
+
+sapply(tab, function(x) sum(is.na(x))) # no NAs 
+```
+
+
+**Soil variables**:
+
+   - $DepthRoots$: Depth available to roots (cm)
+   
+   - $Clay$: Clay content in the topsoil (0-30 cm) (%)
+   
+   - $Sand$: Sand content in the topsoil (0-30 cm) (%)
+   
+   - $Silt$: Silt content in the topsoil (0-30 cm) (%)
+
+```{r ExtractingSoilVariables, eval=F}
+soil.rast <- list(raster("../../Pinpin_Clonapin/data/raw-data/soil/DERIVED_LAYERS/STU_EU_DEPTH_ROOTS_WGS84.tif"),
+                  raster("../../Pinpin_Clonapin/data/raw-data/soil/DERIVED_LAYERS/STU_EU_T_CLAY_WGS84.tif"),
+                  raster("../../Pinpin_Clonapin/data/raw-data/soil/DERIVED_LAYERS/STU_EU_T_SAND_WGS84.tif"),
+                  raster("../../Pinpin_Clonapin/data/raw-data/soil/DERIVED_LAYERS/STU_EU_T_SILT_WGS84.tif"))
+names(soil.rast) <- c("DepthRoots","Clay","Sand","Silt")
+
+for(i in names(soil.rast)){
+rast.var <- projectRaster(soil.rast[[i]],mask)
+rast.var <- crop(rast.var,extent(mask)) # same extent between the two rasters
+#rast.var <- raster::resample(rast.var,mask) # no need, same resolution
+rast.var <- mask(rast.var,mask,updatevalue=NA) # apply the mask
+
+rast.values <- getValues(rast.var) 
+tab.vars <- tibble(cell.num=1:length(rast.values),values=rast.values) %>% drop_na(values)
+colnames(tab.vars)[2] <- i
+tab <- full_join(tab,tab.vars,by="cell.num")
+}
+
+sapply(tab, function(x) sum(is.na(x))) 
+```
+
+
+> Topographic ruggedness index (TRI)
+
+<!-- I first tried to 28 NAs with the tif files in WGS84 (reprojected in SAGA from the UTM31N CRS) but there were 28 missing values. See code below: -->
+
+```{r, eval=F, echo=F}
+# rast.var <- raster("../../GenomicOffset/GenomicOffsetPinPin/data/Topography/TRI/TifsWGS84/TRI_WGS84.tif")
+# rast.var <- projectRaster(rast.var,mask)
+# rast.var <- crop(rast.var,extent(mask)) # same extent between the two rasters
+```
+
+<!-- So I reproject from the UTM31N CRS to the EPSG:3035 (ETRS89, LAEA) CRS in SAGA and there were not missing values anymore. -->
+
+```{r ExtractingTRI, eval=F}
+rast.var <- raster("../../GenomicOffset/GenomicOffsetPinPin/data/Topography/TRI/TifsLAEA/TRI_LAEA.tif") # file reprojected from UTM31N to ETRS89 - LAEA in SAGA
+rast.var <- crop(rast.var,extent(mask)) # same extent between the two rasters
+rast.var <- raster::resample(rast.var,mask) # different resolution because TRI has a 90-m resolution
+rast.var <- mask(rast.var,mask,updatevalue=NA) # apply the mask
+rast.values <- getValues(rast.var) 
+tab.vars <- tibble(cell.num=1:length(rast.values),values=rast.values) %>% drop_na(values)
+colnames(tab.vars)[2] <- "TRI"
+tab <- full_join(tab,tab.vars,by="cell.num")
+```
+
+```{r SaveTab, eval=F}
+saveRDS(tab,file="data/DF_EnvHetero.rds")
+```
+
+
+## Run the PCA
+
+We **perform a PCA** on the selected cell values = cell in forested areas and in 20-km radius around a population location.
+
+
+```{r RunPCA, fig.height=10,fig.width=10}
+tab <- readRDS(file="data/DF_EnvHetero.rds")
+
+pca <- prcomp(tab[,-1], center = TRUE, scale. = TRUE) # centered and scaled PCA
+
+p <- ggbiplot(pca,obs.scale = 1, var.scale = 1, 
+         varname.size =5,alpha = 0.3,labels.size = 10,
+         varname.adjust = 1.5) + 
+  theme_bw() +
+  theme(plot.title = element_text(size=18),
+        axis.title = element_text(size=18),
+        axis.text = element_text(size=12))
+p
+```
+
+We **assign the PC1 and PC2 scores** to the cells on the map. 
+
+```{r AssignPCscores}
+# extract the PC1 and PC2 coordinates of the points (location within 20-km radius around population locations)
+tab[,"PC1"] <- pca$x[,"PC1"] 
+tab[,"PC2"] <- pca$x[,"PC2"]
+range(tab$PC1)
+range(tab$PC2)
+
+# Assign PC1 and PC2 values to the raster mask
+rast.pc2 <- rast.pc1 <- mask
+rast.pc1[tab$cell.num] <- pca$x[,"PC1"]
+rast.pc2[tab$cell.num] <- pca$x[,"PC2"]
+```
+
+## Calculate EH and EHW
+
+```{r ReprojectCRSProvCoord}
+# xyprov is a spatial object of the provenances coordinates in CRS WGS84
+xyprov <- spTransform(xyprov,crs(rast.pc1)) # reproject in ETRS89 - LAEA 
+df <- df %>% mutate(long.laea = xyprov@coords[,1],lat.laea = xyprov@coords[,2])
+```
+
+
+### 20-km radius
+
+We first calculate $EH$ for each population as the variance of cell values in the 20-km radius, such as:
+
+$$ EH = \frac{\sum_{ij}(x_{ij} - \bar{x})^2}{n-1}$$
+
+where $i$ and $j$ are the geographical coordinates of the cells being considered, $x_{ij}$ is the value of the PC1 score at cell $[i,j]$, $\bar{x}$ is the weighted mean for the 20-km radius region. 
+
+```{r CalculateEH}
+# We are going to extract the cell values of the cells in the 20-km radius around the population location
+
+# For PC1
+pop.val1 <- extract(rast.pc1, xyprov, buffer=20000,cellnumbers=TRUE) # we obtain a list with 34 elements
+
+# For PC2
+pop.val2 <- extract(rast.pc2, xyprov, buffer=20000,cellnumbers=TRUE) # we obtain a list with 34 elements
+
+
+# We extract for each population:
+
+# Information related to the number of cells with NAs
+df[,"Nb.NAs.20km"] <- unlist(lapply(pop.val1, function(x) sum(is.na(x[,"value"])))) # number of NAs
+df[,"Nb.val.20km"] <- unlist(lapply(pop.val1, function(x) sum(!is.na(x[,"value"])))) # number of cells with non-NAs values
+df[,"Nb.cell.20km"] <- df[,"Nb.NAs.20km"] + df[,"Nb.val.20km"]  # total number of cells
+
+# Environmental heterogeneity index (variance of the values of the cells within the 20-km radius)
+df[,"EH.20km.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
+df[,"EH.20km.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
+```
+
+
+Comment: Here, we extracted the cells within a 20 km radius around the population location with the `extract` function, i.e. thus selecting the cells that have their center within the 20 km radius around the population location. In a different way, when the mask was constructed, the cells were selected in a buffer zone around the population location with the `buffer` function, so that cells were included if part of the cell was included in the 20 km radius, which results in a larger number of selected cells.
+
+We calculate $EHW$ for each population as the weighted variance of cell values in the 20-km radius region, such as:
+
+$$ EHW =  \frac{\sum_{ij}(x_{ij}-\bar{x})^{2}m_{ij}}{\sum_{ij}m_{ij}}  $$
+
+where $m_{ij}$ is the weighting at cell $[i,j]$.
+
+```{r ParametersEHW, fig.height=6,fig.width=8}
+# parameters from De Lucas et al., 2008
+c <- 0.2229 # shape parameter
+alpha <- 0.0028 # scale parameter
+
+# Visualization of the dispersal kernel with these parameters:
+dist = 1:2000 
+weight=(c/(2*pi*alpha^2*gamma(2/c)))*exp(-((dist)/alpha)^c)
+plot(weight,
+     xlab="Distance in meters",
+     ylab="Weight",
+     pch=16)
+
+# Adding a threshold of 250 meters representing the radius of the samping area
+(c/(2*pi*alpha^2*gamma(2/c)))*exp(-((250)/alpha)^c)
+weight <- 1:2000
+weight[weight<250]= 3.659826e-07
+weight[weight>=250]=(c/(2*pi*alpha^2*gamma(2/c)))*exp(-((weight[weight])/alpha)^c)
+plot(weight,
+     xlab="Distance in meters",
+     ylab="Weight",
+     pch=16)
+```
+
+The weights are almost zero at a distance of more than 100 m.
+
+```{r CalculateEHW}
+calcWeights <- function(x,pop.nb,rast){
+  coords <-  xyFromCell(rast,x[,1])
+  coord.x = coords[,1]
+  coord.y = coords[,2]
+  dist=pointDistance(xyprov@coords[pop.nb,],coords,lonlat = F)
+  weight <- dist
+  weight[weight<250] <- 3.659826e-07
+  for(i in which(weight>=250)) weight[i] <- (c/(2*pi*alpha^2*gamma(2/c)))*exp(-((weight[i])/alpha)^c)
+  x <- cbind(x,coord.x,coord.y,dist,weight)
+  x <- as.data.frame(x)
+  x <- x[!is.na(x$value),]
+  return(x)
+}
+
+# plot(weight~dist,
+#      xlab="Distance in meters",
+#      ylab="Weight",
+#      pch=16)
+
+# 
+# calcWeights <- function(x,pop.nb,rast){
+#   coords <-  xyFromCell(rast,x[,1])
+#   coord.x = coords[,1]
+#   coord.y = coords[,2]
+#   dist=pointDistance(xyprov@coords[pop.nb,],coords,lonlat = F)
+#   weight=(c/(2*pi*alpha^2*gamma(2/c)))*exp(-((dist+250)/alpha)^c) # if we take 200m, PIA is weird for isntance
+#   
+#   x <- cbind(x,coord.x,coord.y,dist,weight)
+#   x <- as.data.frame(x)
+#   x <- x[!is.na(x$value),]
+#   return(x)
+# }
+
+pop.val1 <-mapply(calcWeights, pop.val1,pop.nb=1:33,MoreArgs=list(rast=rast.pc1), SIMPLIFY=F)
+pop.val2 <-mapply(calcWeights, pop.val2,pop.nb=1:33,MoreArgs=list(rast=rast.pc2), SIMPLIFY=F)
+# For EH (already done before): 
+#df[,"EH"] <- unlist(lapply(pop.val, function(x) var(x$value)))
+# df[,"EH"] <- unlist(lapply(pop.val, function(x) sum((x$value-mean(x$value))^2)/(length(x$cell)-1)))
+
+# Calculation EHW
+df[,"EHW.20km.PC1"] <- unlist(lapply(pop.val1, function(x) sum(((x$value-mean(x$value))^2)*x$weight)/sum(x$weight)))
+df[,"EHW.20km.PC2"] <- unlist(lapply(pop.val2, function(x) sum(((x$value-mean(x$value))^2)*x$weight)/sum(x$weight)))
+
+df[,"minDist"] <- unlist(lapply(pop.val1, function(x) min(x$dist)))
+df[,"meanDist"] <- unlist(lapply(pop.val1, function(x) mean(x$dist,na.rm=T)))
+df[,"Dist1000"] <- unlist(lapply(pop.val1, function(x) length(x$cell[x$dist<1000])))
+```
+
+
+```{r VisualizationPC1, fig.height=8,fig.width=16}
+layout(matrix(1:4,2,2))
+
+buff20 <- spTransform(buff20,crs(rast.pc1))
+
+minPC1 <- range(tab$PC1)[[1]]
+maxPC1 <- range(tab$PC1)[[2]]
+
+# CEN
+nb=1
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3060000,2045000, "CEN",cex=1.4)
+
+# ARN
+nb=2
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3010000,2045000, "ARN",cex=1.4)
+
+
+# TAM
+nb=13
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(2890000,1330000, "TAM",cex=1.4)
+
+# Corsica
+ext.laea <- extent(matrix(c( 4220000  ,  2070000, 4290000  , 2130000 ), nrow=2))
+rastpop <- rast.pc1
+plot(rastpop,ext=ext.laea,
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(xyprov,add=T)
+plot(buff20,add=T)
+text(4215000,2125000, "PIE and PIA",cex=1.4)
+```
+
+### 1.6-km radius
+
+```{r}
+# We are going to extract the cell values of the cells in the 1.6-km radius around the population location
+
+# For PC1
+pop.val1 <- extract(rast.pc1, xyprov, buffer=1600,cellnumbers=TRUE) # we obtain a list with 34 elements
+
+# For PC2
+pop.val2 <- extract(rast.pc2, xyprov, buffer=1600,cellnumbers=TRUE) # we obtain a list with 34 elements
+
+
+# We extract for each population:
+
+# Information related to the number of cells with NAs
+df[,"Nb.NAs.1km"] <- unlist(lapply(pop.val1, function(x) sum(is.na(x[,"value"])))) # number of NAs
+df[,"Nb.val.1km"] <- unlist(lapply(pop.val1, function(x) sum(!is.na(x[,"value"])))) # number of cells with non-NAs values
+df[,"Nb.cell.1km"] <- df[,"Nb.NAs.1km"] + df[,"Nb.val.1km"]  # total number of cells
+
+# Environmental heterogeneity index (variance of the values of the cells within the 1.6-km radius)
+df[,"EH.1km.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
+df[,"EH.1km.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
+
+df %>% 
+  dplyr::select(contains("1km")) %>%
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+```{r}
+# For PC1
+pop.val1 <- extract(rast.pc1, xyprov, buffer=3000,cellnumbers=TRUE) # we obtain a list with 34 elements
+
+# For PC2
+pop.val2 <- extract(rast.pc2, xyprov, buffer=3000,cellnumbers=TRUE) # we obtain a list with 34 elements
+
+Keep9cells <- function(x,pop.nb,rast){
+  coords <-  xyFromCell(rast,x[,1])
+  coord.x = coords[,1]
+  coord.y = coords[,2]
+  dist=pointDistance(xyprov@coords[pop.nb,],coords,lonlat = F)
+  weight <- dist
+  weight[weight<250] <- 3.659826e-07
+  for(i in which(weight>=250)) weight[i] <- (c/(2*pi*alpha^2*gamma(2/c)))*exp(-((weight[i])/alpha)^c)
+  x <- cbind(x,coord.x,coord.y,dist)
+  x <- as.data.frame(x)
+  x <- x[!is.na(x$value),]
+  x <- arrange(x,by=dist) %>% slice(1:9)
+  return(x)
+}
+
+pop.val1 <-mapply(Keep9cells, pop.val1,pop.nb=1:33,MoreArgs=list(rast=rast.pc1), SIMPLIFY=F)
+pop.val2 <-mapply(Keep9cells, pop.val2,pop.nb=1:33,MoreArgs=list(rast=rast.pc2), SIMPLIFY=F)
+
+# We extract for each population:
+
+# Information related to the number of cells with NAs
+df[,"Nb.NAs.9cells"] <- unlist(lapply(pop.val1, function(x) sum(is.na(x[,"value"])))) # number of NAs
+df[,"Nb.val.9cells"] <- unlist(lapply(pop.val1, function(x) sum(!is.na(x[,"value"])))) # number of cells with non-NAs values
+df[,"Nb.cell.9cells"] <- df[,"Nb.NAs.1km"] + df[,"Nb.val.1km"]  # total number of cells
+
+# Environmental heterogeneity index (variance of the values of the cells within the 1.6-km radius)
+df[,"EH.9cells.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
+df[,"EH.9cells.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
+
+df %>% 
+  dplyr::select(contains("9cells")) %>%
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+
+## Visualization
+
+```{r VisualizeEnvHeteroLeaflet,eval=F, fig.width=8,fig.height=8,echo=F}
+# I don't know why, leaflet doesn't represent well the raster cells within the 20-km and 1.6-km radius,
+# so I stopped using it for visualization
+# probably a problem of projection
+labels <- sprintf("<strong> %s </strong><br/>Northern Africa: %s <br/>Corsica: %s <br/>Central Spain: %s <br/>French Atlantic: %s <br/>Iberian Atlantic: %s <br/>South-eastern Spain: %s <br/>EH PC1 20-km: %s <br/>EHW PC1 20-km: %s <br/>EH PC2 20-km: %s <br/>EHW PC2 20-km: %s <br/>EH PC1 1.6-km: %s <br/>EH PC2 1.6-km: %s",
+                  df$prov,round(df$gpNA,2), 
+                  round(df$gpC,2),
+                  round(df$gpCS,2),
+                  round(df$gpFA,2),
+                  round(df$gpIA,2),
+                  round(df$gpSES,2),
+                  round(df$EH.20km.PC1,2),
+                  round(df$EHW.20km.PC1,2),
+                  round(df$EH.20km.PC2,2),
+                  round(df$EHW.20km.PC2,2),
+                  round(df$EH.1km.PC1,2),
+                  round(df$EH.1km.PC2,2)) %>%
+  lapply(htmltools::HTML)
+labelsOnlyProv <- sprintf("<strong> %s </strong><br/>",
+                  df$prov) %>%
+  lapply(htmltools::HTML)
+
+pal=colorNumeric("Spectral",raster::values(rast.pc1),na.color = "transparent")
+
+leaflet() %>% 
+  addRasterImage(rast.pc1 , colors = pal, opacity = 0.8) %>%
+  addCircleMarkers(data=df,~longitude, ~latitude,radius = 0.01,color="black",fillOpacity = 1,
+                     label=labels,labelOptions = labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"),
+                                                              textsize = "15px", direction = "auto")) 
+
+```
+
+
+## Tables (to check variable plausibility)
+
+Correlations among the environmental heterogeneity indexes:
+
+```{r CorEnvHeteroIndexes, echo=F}
+df %>% dplyr::select(contains("EH")) %>% cor() %>% 
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+At 20-km radius, weak correlation between $EH$ and $EHW$ and the number of no-NA and NA cells:
+
+```{r CorEnvHeteroNbCells20km, echo=F}
+df %>% dplyr::select(contains("20")) %>% 
+  cor() %>% 
+  as.data.frame() %>% 
+  dplyr::select(EH.20km.PC1,EH.20km.PC2,EHW.20km.PC1,EHW.20km.PC2) %>% 
+  slice(1:3) %>% 
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+At 1.6-km radius, very weak correlation between $EH$ and $EHW$ and the number of no-NA and NA cells:
+
+```{r CorEnvHeteroNbCells1km, echo=F}
+df %>% dplyr::select(contains("1km")) %>% 
+  cor() %>% 
+  as.data.frame() %>% 
+  dplyr::select(EH.1km.PC1,EH.1km.PC2) %>% 
+  slice(1:3) %>% 
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+     
+$EH$ at 20-km radius has plausible outputs, while $EHW$ has highly implausible values. See table below the provenance sorted by $EH$ values:
+
+```{r SortEH20km, echo=F}
+df %>% 
+  dplyr::select(prov,EH.20km.PC1,EH.20km.PC2,EHW.20km.PC1,EHW.20km.PC2,EH.1km.PC1,EH.1km.PC2,EH.9cells.PC1,EH.9cells.PC2) %>% 
+  arrange(by=EH.20km.PC1) %>% 
+  kable() %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+Same table but sorted by $EH$ at 1.6-km radius:
+
+```{r SortEH1km, echo=F}
+df %>% 
+  dplyr::select(prov,EH.20km.PC1,EH.20km.PC2,EHW.20km.PC1,EHW.20km.PC2,EH.1km.PC1,EH.1km.PC2,EH.9cells.PC1,EH.9cells.PC2) %>% 
+  arrange(by=EH.1km.PC1) %>% 
+  kable() %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+
+
+```{r Correlations, echo=F,eval=F}
+# same as Nb.val
+# df[,"Nbcell2"] <- unlist(lapply(pop.val, function(x) length(x$value))) # 
+
+df[,"VarDist"] <- unlist(lapply(pop.val1, function(x) var(x$dist)))
+df[,"MeanDist"] <- unlist(lapply(pop.val1, function(x) mean(x$dist)))
+df[,"MeanValue"] <- unlist(lapply(pop.val1, function(x) mean(x$value)))
+df[,"DenominatorEHW"] <- unlist(lapply(pop.val1, function(x) sum(x$weight)))
+df[,"NumeratorEHW"] <- unlist(lapply(pop.val1, function(x) sum(((x$value-mean(x$value))^2)*x$weight)))
+
+
+# Correlations
+corEHWVarDist <- cor(df[,"EHW"],df[,"VarDist"])
+corEHWMeanDist <- cor(df[,"EHW"],df[,"MeanDist"])
+corEHWMeanValue <- cor(df[,"EHW"],df[,"MeanValue"])
+corEHWDenominator <- cor(df[,"EHW"],df[,"DenominatorEHW"])
+corEHWVNumerator <- cor(df[,"EHW"],df[,"NumeratorEHW"])
+
+  # - $EHW$ has very weird outputs. For instance, for Corsican provenances, PIA provenance has a high $EHW$ value whereas the adjacent cells to the population location have similar values than the cell of the population location, and the PIE provenance has a low $EHW$ value whereas the adjacent cells have slightly different values than that of the population location. No correlation can explained these strange outputs:
+  # 
+  #   - correlations between $EHW$ and mean and variance of the distances between the population location and the other cells of the 20-km radius: $\rho =$ `r corEHWMeanDist` and $\rho =$ `r corEHWVarDist`.
+  # 
+  #   - correlation between $EHW$ and the mean of the cell values in the 20-km radius: $\rho =$ `r corEHWMeanValue`.
+  # 
+  #   - correlation between $EHW$ and the numerator and denominator of $EHW$: $\rho =$ `r corEHWVNumerator` and $\rho =$ `r corEHWDenominator`.
+```
+
+<span style="color: red;">In the following analyses, we are going to use $EH$ at 20-km radius for both PC1 and PC2 and $EH$ at 1.6-km radius for both PC1 and PC2 too.</span>
+
+
+# Climate harshness
+
+## Summer heat moisture index
+
+The higher the $SHM$, the drier the weather.
+
+```{r ExtractSHM}
+var <- "SHM"
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",var,".tif"))
+df[,var] <- extract(rast.var, xyprov) #
+df %>% 
+  dplyr::select(prov,SHM) %>% 
+  arrange(by=SHM) %>% 
+  kable() %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+## Extreme minimum temperature
+
+$EMT$: he extreme minimum temperature over the period considered (1901-1950)
+
+```{r ExtractEMT}
+var <- "EMT"
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",var,".tif"))
+df[,var] <- extract(rast.var, xyprov) #
+df %>% 
+  dplyr::select(prov,EMT) %>% 
+  arrange(by=EMT) %>% 
+  kable() %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+# Correlations among the potential drivers
+
+```{r CorrelationsAllDrivers}
+df %>% dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
+                     #EHW.20km.PC1,EHW.20km.PC2,
+                     EH.1km.PC1,EH.1km.PC2,SHM,EMT) %>% 
+  cor() %>% 
+  lower.triangle() %>% 
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+
+```{r SaveDF}
+saveRDS(df,file="data/DF_Drivers.rds")
+```
+
+# Bibliography
+
