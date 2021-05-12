@@ -1,0 +1,717 @@
+---
+title: "Associating within-population genetic variation with potential underlying drivers"
+subtitle: "Based on real data"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=TRUE,cache.lazy = FALSE)
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=F)
+options(width = 300)
+library(knitr)        # CRAN v1.26
+library(reshape2)     # CRAN v1.4.4
+library(dplyr)        # CRAN v1.0.0
+library(tidyverse)    # CRAN v1.3.0
+library(kableExtra)   # CRAN v1.1.0
+library(rstan)        # CRAN v2.19.2
+library(broom)        # CRAN v0.5.2
+library(loo)          # CRAN v2.2.0
+library(latex2exp)    # CRAN v0.4.0
+library(parallel)
+library(tidytidbits)  # CRAN v0.2.3
+library(tidybayes)    # CRAN v2.0.1
+library(bayesplot)    # CRAN v1.7.1
+library(cowplot)      # CRAN v1.0.0
+theme_set(theme_bw(base_size = 20))
+color_scheme_set("green")
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+```
+
+```{r OptionDocs}
+# Options for sampling
+n_chains <- 4
+n_iter <- 2500
+n_warm <- 1250
+n_thin <- 1
+save_warmup = FALSE 
+
+theme_set(theme_bw(base_size = 20))
+
+# option for the MCMC intervals
+point.est="median"
+
+conf.level <- 0.95
+```
+
+
+In this document, we aim to estimate the relationship between potential drivers (namely, two admixture scores, two indexes of environmental heterogeneity and two indexes of climatic harshness) and the within-population genetic variation. 
+
+For each potential driver $X_{p}$, we model the normally-distributed traits $y_{bpcr}$ with the following statistical model:
+
+\begin{equation}
+\begin{aligned}
+y_{bpcr} & \sim  \mathcal{N}(\mu_{bpc},\sigma^{2}_{r})\\[3pt]
+\mu_{bpc} & =  \beta_{0} +  B_{b} + P_{p} + C_{c(p)}\\[3pt]
+\beta_{0} & \sim \mathcal{N}(\mu_{y},2)\\[3pt]
+\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix} 
+    &\sim \mathcal{N}\left(0,
+\begin{bmatrix}
+\sigma^{2}_{B}\\[3pt]
+\sigma^{2}_{P}\\
+\end{bmatrix}
+\right)\\[3pt]
+C_{c(p)} & \sim \mathcal{N}(0,\sigma^{2}_{C_{p}})\\[3pt]
+\overline{\sigma_{C_{p}}^{2}} & = \frac{\sum_{p=1}^{33} \sigma_{C_{p}}^{2}}{33} \\[3pt]
+\sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \overline{\sigma_{C_{p}}^{2}} + \sigma_{P}^{2}\\[3pt]
+\sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{r})\\[3pt]
+\sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{B})\\[3pt]
+\sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{P})\\[3pt]
+\sigma_{C_{p}} & \sim \mathcal{LN}\left(\ln\left(\sigma_{tot} \times  \sqrt(\pi_{C})\right)-\frac{\sigma^{2}_{K}}{2} + \beta_{x}X_{p},\sigma^{2}_{K}\right)\\[3pt]
+\sigma_{K} & \sim \exp(1)\\[3pt]
+\sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
+\end{aligned}
+\end{equation}
+
+`r knitr::opts_chunk$set(eval = F)`
+
+Here is the stan model code:
+
+```{r ModelCompilation,eval=F}
+model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+```
+
+
+```{r FunctionDownloadFormatData,eval=F}
+DownloadData <- function(trait){
+
+  drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
+    dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+    dplyr::mutate(across(-prov,scale))
+  
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+      
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::mutate(trait = rowMeans(select(.,contains("BDX")),na.rm=T)) %>%
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov") 
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov")
+  
+  }
+  
+  
+  # df %>% dplyr::select(prov,clon) %>% distinct()   %>% group_by(prov) %>% dplyr::summarise(count.clones=n()) %>% print(n=33)
+  # df %>% select(prov,clon,trait) %>% group_by(prov) %>% summarise(mean=mean(trait)) %>% print(n=33)
+  
+  list.trait <- list(df=df)
+
+  list.stan <- lapply(colnames(drivers %>% dplyr::select(-prov)), function(x)    {
+    list(N=length(df$tree),
+         y=df$trait,
+         X=as.numeric(pull(unique(df[,c(x,"prov")]) %>% dplyr::select(contains(x)))),
+         nprov = length(unique(df$prov)),
+         nclon = length(unique(df$clon)),
+         nblock = length(unique(df$block)),
+         prov = as.numeric(as.factor(df$prov)),
+         which_prov = as.numeric(as.factor(pull(unique(df[c("prov","clon")])[,"prov"]))),
+         clon = as.numeric(as.factor(df$clon)),
+         bloc = as.numeric(as.factor(df$block)))})
+  
+  names(list.stan) <- colnames(drivers %>% dplyr::select(-prov))
+  
+  return(c(list.trait,list.stan))
+}
+```
+
+
+
+```{r WhichTrait}
+# For these traits, the response variable is not centered
+CenterResponseVariable <- FALSE
+LogResponseVariable <- FALSE
+trait <- "POR_htoct12" # Height in  Fundão (Portugal) - October 2012
+trait <- "BDX_htnov13" # Pierroton (France) - November 2013
+trait <- "BDX_htnov18" # Pierroton (France) - November 2018 
+trait <- "AST_htnov12" # Cabada (Asturias, Spain) - November 2012
+
+# For this trait, the response variable is not centered and we used its logarithm as response variable
+CenterResponseVariable <- FALSE
+LogResponseVariable <- TRUE
+trait <- "POR_SLA"
+# trait <- "BDX_s32014"
+# trait <- "BDX_dbb2014"
+
+# For this trait, I centered the response variable to help convergence
+CenterResponseVariable <- TRUE
+LogResponseVariable <- FALSE
+trait <- "d13C"        # Delta13C
+trait <- "MeanBB"      # mean bud burst data over four years (2013, 2014, 2015, 2017)
+trait <- "MeanDBB"     # mean duration of bud burst over three years (2014, 2015, 2017)
+```
+
+For each trait, we ran eight models, one for each potential drivers:
+
+```{r RunModel,eval=F}
+list.trait <- DownloadData(trait)
+
+list.models <- list()
+
+for(i in names(list.trait)[-1]){
+  
+  list.models[[i]] <- sampling(model, 
+                               data = list.trait[[i]], 
+                               pars=c("beta0","betaX",
+                                      "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
+                                      "sigma_tot","sigma_block","sigma_prov",
+                                      "mean_sigma_clon","sigma_clon","sigma_K",
+                                      #"alpha_clon","alpha_prov",#"alpha_block",
+                                      # "y_rep" not included not to have a too heavy file
+                                      "R_squared","log_lik"),
+                               iter = n_iter, 
+                               chains = n_chains, 
+                               cores = n_chains,
+                               save_warmup = save_warmup,
+                               thin=n_thin)
+}
+
+saveRDS(list.models,file=paste0("outputs/models/",trait,".rds"))
+```
+
+We use the `loo` package to compare the models based on the (ELPD)[http://mc-stan.org/loo/reference/loo-glossary.html].
+
+```{r Loo,eval=F}
+loos <- mclapply(list.models,loo)
+loocompare <- loo_compare(x=loos)
+saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))
+```
+
+# Posterior distributions
+
+## $\beta_{X}$
+
+```{r BetaXTraitSpecificFigure,eval=F}
+p <- mclapply(list.models, function(x) broom::tidyMCMC(x,pars=("betaX"),
+              droppars = NULL, 
+              estimate.method = point.est, 
+              ess = F, 
+              rhat = F, 
+              conf.int = T,
+              conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Xp=names(list.models)) %>% 
+  ggplot(aes(x = Xp, y = estimate)) +
+  geom_linerange(aes(x = Xp, ymin = conf.low, ymax = conf.high)) +
+  geom_point(size = 2) +
+  ylab(TeX("Estimation of $\\beta_{X}$")) + xlab("") +
+  labs(subtitle="95% credible intervals & Median",
+       title=paste0("Trait: ",trait)) +
+  scale_x_discrete(labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size=16),axis.title = element_text(size=16))
+
+p
+ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_BetaX.png"),height=7,width=9)
+```
+
+
+```{r BetaXAllTraitsFigure}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
+
+ExtractBetaX <- function(x)  {
+  readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=("betaX"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Xp=drivers,
+         Traits=x)
+}
+
+df.betaX <- mclapply(traits,ExtractBetaX) %>% 
+  bind_rows()
+
+
+# Option 1
+df.betaX$Traits <- as.factor(df.betaX$Traits)
+df.betaX$Traits <- factor(df.betaX$Traits,levels=rev(c(traits)))
+df.betaX$Xp <- as.factor(df.betaX$Xp)
+df.betaX$Xp <- factor(df.betaX$Xp,levels=rev(levels(df.betaX$Xp)))
+
+
+p <- df.betaX %>% 
+  ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2) +
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  coord_flip() +
+  scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
+                     labels = rev(c("Height (Fundão, 20 months)",
+                                "Height (Pierroton, 25 months)",
+                                "Height (Pierroton, 85 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Surface Leaf Area",
+                                parse(text = TeX("$\\delta^{13}C$")))
+                     )) +
+  theme_bw() +
+  theme(axis.text = element_text(size=16),axis.title = element_text(size=16),
+    legend.title=element_text(size=12), 
+    legend.text=element_text(size=11),
+    panel.grid.minor.y=element_blank(),
+    panel.grid.major.y=element_blank()) +
+    guides(color=guide_legend(reverse=TRUE))
+
+p
+ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX.png",height=10,width=10)
+
+
+# Option 2
+p <- df.betaX %>% 
+  mutate(Hyp=case_when(Xp=="A"~"Demographic history",
+                       Xp=="D"~"Demographic history",
+                       Xp=="EH1[20km]"~"Environmental heterogeneity",
+                       Xp=="EH2[20km]"~"Environmental heterogeneity",
+                       Xp=="EH1[1.6km]"~"Environmental heterogeneity",
+                       Xp=="EH2[1.6km]"~"Environmental heterogeneity",
+                       Xp=="SHM"~"Climate harshness",
+                       Xp=="invEMT"~"Climate harshness")) %>% 
+  ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
+  facet_grid(rows = vars(Hyp),scales="free", space = "free") +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2) +
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  coord_flip() +
+  scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
+                     labels = rev(c("Height (Fundão, 20 months)",
+                                "Height (Pierroton, 25 months)",
+                                "Height (Pierroton, 85 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Surface Leaf Area",
+                                parse(text = TeX("$\\delta^{13}C$")))
+                     )) +
+  theme_bw() +
+  theme(axis.text = element_text(size=16),axis.title = element_text(size=16),
+    legend.title=element_text(size=12), 
+    legend.text=element_text(size=11),
+    panel.grid.minor.y=element_blank(),
+    panel.grid.major.y=element_blank()) +
+    guides(color=guide_legend(reverse=TRUE))
+p
+ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid.png",height=10,width=10)
+
+
+df.betaX  <- df.betaX %>%
+  mutate(Hyp=case_when(Xp=="A"~"Demographic history",
+                       Xp=="D"~"Demographic history",
+                       Xp=="EH1[20km]"~"Environmental heterogeneity",
+                       Xp=="EH2[20km]"~"Environmental heterogeneity",
+                       Xp=="EH1[1.6km]"~"Environmental heterogeneity",
+                       Xp=="EH2[1.6km]"~"Environmental heterogeneity",
+                       Xp=="SHM"~"Climate harshness",
+                       Xp=="invEMT"~"Climate harshness"))
+
+# # Option 3
+# 
+# df.betaX$Xp <- factor(df.betaX$Xp,levels=rev(levels(df.betaX$Xp)))
+# 
+# pf.reverse <- df.betaX %>% 
+#   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
+#   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5) +
+#   facet_grid(.~Hyp,scales="free", space = "free") + 
+#   #facet_grid(~fct_relevel(Hyp,"Demographic history","Climate harshness","Environmental heterogeneity"))
+#   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+#   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
+#                      labels = rev(c("Height (Fundão, 20 months)",
+#                                 "Height (Pierroton, 25 months)",
+#                                 "Height (Pierroton, 85 months)",
+#                                 "Height (Asturias, 21 months)",
+#                                 "Surface Leaf Area",
+#                                 "Mean bud burst date",
+#                                 "Mean duration of bud burst",
+#                                 parse(text = TeX("$\\delta^{13}C$")))
+#                      )) +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(size=10),
+#         axis.text.y = element_text(size=16),
+#         axis.title = element_text(size=16),
+#         legend.title=element_text(size=12), 
+#         strip.text.x = element_text(size = 14),
+#         legend.text=element_text(size=9),
+#         panel.grid.minor.x=element_blank(),
+#         panel.grid.major.x=element_blank()) +
+#     guides(color=guide_legend(reverse=TRUE))
+#     
+# ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid_Reverse.png",height=8,width=14)
+
+# Option 4
+df.betaX$Xp <- factor(df.betaX$Xp,
+                      levels=c("SHM","invEMT","EH1[20km]","EH1[1.6km]","EH2[20km]","EH2[1.6km]","D","A"))
+
+p <- df.betaX %>% 
+  ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  #facet_grid(~fct_relevel(Hyp,"Demographic history","Climate harshness","Environmental heterogeneity"))
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  #coord_flip() +
+  scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
+                     labels = rev(c("Height (Fundão, 20 months)",
+                                "Height (Pierroton, 25 months)",
+                                "Height (Pierroton, 85 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Surface Leaf Area",
+                                parse(text = TeX("$\\delta^{13}C$")))
+                     )) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.112, .19),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(reverse=TRUE))
+    
+p
+
+ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid_Reverse_LegendBottomLeft.png",height=8,width=14)
+
+# Option 5
+# For the paper, figure with not all the drivers
+p <- df.betaX %>% 
+  dplyr::filter(!(Xp %in% c("D","EH1[1.6km]","EH2[1.6km]"))) %>% 
+  ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  #facet_grid(~fct_relevel(Hyp,"Demographic history","Climate harshness","Environmental heterogeneity"))
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  #coord_flip() +
+  scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
+                     labels = rev(c("Height (Fundão, 20 months)",
+                                "Height (Pierroton, 25 months)",
+                                "Height (Pierroton, 85 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Surface Leaf Area",
+                                parse(text = TeX("$\\delta^{13}C$")))
+                     )) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.14, .185),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(reverse=TRUE))
+    
+p
+ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid_Reverse_LegendBottomLeft_5Drivers.png",
+       height=8,width=10)
+```
+
+
+## $\sigma^{2}_{C_{p}}$
+
+```{r SigmaClon}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
+
+provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  arrange(by=tree) %>% 
+  distinct(prov) %>% 
+  pull()
+
+mclapply(traits,function(x){
+if(x=="MeanBB"){
+    legend.position <- c(0.85,0.86)} else {
+    legend.position <- c(.15, .86)}
+  
+p <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("sigma2_clon"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prov=rep(provs,8)) %>% 
+  ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("Populations") +
+  ylab(TeX("$\\sigma^{2}_{C_{p}}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = legend.position,
+        legend.background = element_rect(colour = "grey"),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=4))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon.png"),height=6,width=22)
+  
+})
+
+```
+
+
+## Variance partitioning
+
+
+```{r VartPartFigs}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
+
+mclapply(traits,function(x){
+  p <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("pi"),
+                droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),8)) %>% 
+  
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Clones",
+                            "Blocks",
+                            "Populations",
+                            "Residuals"
+                            )) +
+  theme(legend.position = c(.135, .81),
+        legend.background = element_rect(colour = "grey"),
+        axis.text = element_text(size=25),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=2))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_VarPart.png"),height=6,width=18)
+  
+})
+
+```
+
+
+```{r VarPartAllHeights}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12")
+drivers <- c("A","EH1[20km]","EH2[20km]","SHM","invEMT") 
+
+sigmas <- mclapply(traits,function(x){
+  readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("pi"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, rhat = F, 
+                conf.int = T,
+                conf.level = 0.95)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),8)) 
+  
+}) %>% 
+  bind_rows() %>% 
+  dplyr::filter(!(Drivers %in% c("D","EH.1km.PC1","EH.1km.PC2")))
+
+
+maxylim <- 0.9
+legend.text <- 20
+line.size <- 10
+point.size <- 5
+
+p1 <- sigmas %>% 
+  dplyr::filter(Traits=="POR_htoct12") %>% 
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=point.size,alpha=0.6,size=line.size) +
+  scale_color_manual(values=c("#7FBC41",
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylim(0,maxylim) +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Clones",
+                            "Blocks",
+                            "Populations",
+                            "Residuals"
+                            )) +
+  theme(legend.position = c(.2, .73),
+        legend.text = element_text(size=legend.text,margin = margin(t = 10)),
+        legend.background = element_rect(colour = "grey"),
+        axis.text = element_text(size=22),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=1))
+
+p2 <- sigmas %>% 
+  dplyr::filter(Traits=="BDX_htnov13") %>% 
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=point.size,alpha=0.6,size=line.size) +
+  scale_color_manual(values=c("#7FBC41",
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylab("") +
+  ylim(0,maxylim) +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Clones",
+                            "Blocks",
+                            "Populations",
+                            "Residuals"
+                            )) +
+  theme(legend.position = "none",
+        axis.text = element_text(size=22),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=1))
+
+
+p3 <- sigmas %>% 
+  dplyr::filter(Traits=="BDX_htnov18") %>% 
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=point.size,alpha=0.6,size=line.size) +
+  scale_color_manual(values=c("#7FBC41",
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylim(0,maxylim) +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Clones",
+                            "Blocks",
+                            "Populations",
+                            "Residuals"
+                            )) +
+  theme(legend.position = "none",
+        axis.text = element_text(size=22),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=1))
+
+p4 <- sigmas %>% 
+  dplyr::filter(Traits=="AST_htnov12") %>% 
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=point.size,alpha=0.6,size=line.size) +
+  scale_color_manual(values=c("#7FBC41",
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylab("") +
+  ylim(0,maxylim) +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Clones",
+                            "Blocks",
+                            "Populations",
+                            "Residuals"
+                            )) +
+  theme(legend.position = "none",
+        axis.text = element_text(size=22),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=1))
+
+p <- plot_grid(p1,p2,p3,p4,
+          labels = c('A)','B)',"C)","D)"),
+                 label_size = 20 )
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),height=14,width=17)
+  
+```
+
+
+
