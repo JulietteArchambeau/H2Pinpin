@@ -51,12 +51,12 @@ pre[class] {
 knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=FALSE)
 options(width = 300)
 options(knitr.table.format = "latex")
-library(knitr)
-library(dplyr)
-library(tidyverse)
-library(latex2exp)
-library(cowplot)
-library(kableExtra)
+library(knitr)      # CRAN v1.26
+library(dplyr)      # CRAN v1.0.0
+library(tidyverse)  # CRAN v1.3.0
+library(latex2exp)  # CRAN v0.4.0
+library(cowplot)    # CRAN v1.0.0
+library(kableExtra) # CRAN v1.1.0
 ```
 
 
@@ -88,60 +88,6 @@ In the document, the plots colored in green correspond to the trait selected in 
 ```{r}
 data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
    dplyr::filter(!(prov=="MAD"))
-```
-
-```{r}
-tibble(Trait=c(rep("Height",4),"Bud burst", "Duration of bud burst","SLA","$\\delta^{13}$C"),
-       
-       "Common garden"=c("Fundão","Cabada",rep("Pierroton",4),rep("Fundão",2)),
-       
-       "Date of measurement" =c("October 2012","November 2012","November 2013", "November 2018", "January 2014", "January 2014", NA,NA),
-       
-       "Tree age"=c(20,21,25,85,27,27,NA,NA),
-       
-       "Unit"=c(rep("mm",4),"°C-day","°C-day","m$^{2}$/kg","‰"),
-       
-       "Trees"=c(length(data$tree[!is.na(data$POR_htoct12)]),  # height Fundão (Portugal) 2012
-                 length(data$tree[!is.na(data$AST_htnov12)]),  # height Cabada (Asturias) 2012
-                 length(data$tree[!is.na(data$BDX_htnov13)]),  # height Pierroton 2013
-                 length(data$tree[!is.na(data$BDX_htnov18)]),  # height Pierroton 2018
-                 length(data$tree[!is.na(data$BDX_s32014)]),   # bud burst Pierroton 2014
-                 length(data$tree[!is.na(data$BDX_dbb2014)]),  # duration bud burst Pierroton 2014
-                 length(data$tree[!is.na(data$POR_SLA)]),      # SLA Fundão 
-                 length(data$tree[!is.na(data$d13C)])),        # delta 13 C Fundão 
-       
-        "Populations" = c(length(unique(data$prov[!is.na(data$POR_htoct12)])), # height Portugal 2012
-                          length(unique(data$prov[!is.na(data$AST_htnov12)])), # height Asturias 2012
-                          length(unique(data$prov[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
-                          length(unique(data$prov[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
-                          length(unique(data$prov[!is.na(data$BDX_s32014)])),  # bud burst Pierroton 2014
-                          length(unique(data$prov[!is.na(data$BDX_dbb2014)])), # duration bud burst Pierroton 2014
-                          length(unique(data$prov[!is.na(data$POR_SLA)])),     # SLA Fundão 
-                          length(unique(data$prov[!is.na(data$d13C)]))),       # delta 13 C Fundão 
-                          
-        "Clones" = c(length(unique(data$clon[!is.na(data$POR_htoct12)])), # height Portugal 2012
-                     length(unique(data$clon[!is.na(data$AST_htnov12)])), # height Asturias 2012
-                     length(unique(data$clon[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
-                     length(unique(data$clon[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
-                     length(unique(data$clon[!is.na(data$BDX_s32014)])),  # bud burst Pierroton 2014
-                     length(unique(data$clon[!is.na(data$BDX_dbb2014)])), # duration bud burst Pierroton 2014
-                     length(unique(data$clon[!is.na(data$POR_SLA)])),     # SLA Fundão 
-                     
-                     length(unique(data$clon[!is.na(data$d13C)]))),       # delta 13 C Fundão   
-        "Blocks" = c(length(unique(data$block[!is.na(data$POR_htoct12)])), # height Portugal 2012
-                     length(unique(data$block[!is.na(data$AST_htnov12)])), # height Asturias 2012
-                     length(unique(data$block[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
-                     length(unique(data$block[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
-                     length(unique(data$block[!is.na(data$BDX_s32014)])),  # bud burst Pierroton 2014
-                     length(unique(data$block[!is.na(data$BDX_dbb2014)])), # duration bud burst Pierroton 2014
-                     length(unique(data$block[!is.na(data$POR_SLA)])),     # SLA Fundão 
-                     length(unique(data$block[!is.na(data$d13C)])))        # delta 13 C Fundão   
-          ) %>% 
-  
-  kable(caption="Table XX of the paper",escape = FALSE) %>%
-  
-  kable_styling(latex_options =c("striped", "hold_position"))
-
 ```
 
 
@@ -498,10 +444,12 @@ ggplot(data, aes(x= BDX_s32017)) +
 
 
 ```{r BBhistMean,fig.height=4,fig.width=4}
-data %>% 
-  dplyr::select(BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017) %>% 
-  filter(rowSums(is.na(.)) != ncol(.)) %>% 
-  dplyr::mutate(mean = rowMeans(.,na.rm=T)) %>% 
+meanBB <-data %>% 
+  dplyr::select(prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017) %>% 
+  filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+  dplyr::mutate(mean = rowMeans(select(.,contains("BDX")),na.rm=T))
+
+meanBB %>% 
   ggplot(aes(x= mean)) + 
   geom_histogram(binwidth = 15) +  
   theme_bw() + 
@@ -601,14 +549,15 @@ ggplot(data, aes(x= BDX_dbb2017)) +
 
 
 ```{r DBBhistMean,fig.height=4,fig.width=4}
-data %>% 
-  dplyr::select(BDX_dbb2014,BDX_dbb2015,BDX_dbb2017) %>% 
-  filter(rowSums(is.na(.)) != ncol(.)) %>% 
-  dplyr::mutate(mean = rowMeans(.,na.rm=T)) %>% 
-  ggplot(aes(x= mean)) + 
+meanDBB <- data %>% 
+  dplyr::select(prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017) %>% 
+  dplyr::filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+  dplyr::mutate(mean = rowMeans(select(.,contains("BDX")),na.rm=T))
+
+meanDBB %>%   ggplot(aes(x= mean)) + 
   geom_histogram(binwidth = 15) +  
   theme_bw() + 
-  labs(x="Mean bud burst over the 4 measurement years",y="")
+  labs(x="Mean duration of bud burst over the 3 measurement years",y="")
 ```
 
 
@@ -673,7 +622,7 @@ table(data$BDX_s12015,data$BDX_s42015)
 table(data$BDX_s12017,data$BDX_s42017)
 ```
 
-**We are going to select the bud burst and duration of bud burst of 2014 as there is more phenotypic variation than the other years.**
+**In the following analyses, we are going to select the mean bud burst date over the four years and the mean duration of bud burst over three years, as it will be easier from a statistical point of view (the trait distribution is almost normal), and it buffers the variations among years.**
 
 # Functional traits
 
@@ -815,3 +764,112 @@ p <- ggplot(data, aes(x=POR_SLA, fill=as.factor(prov))) +
 p
 ggsave(p,file="figs/ExploratoryAnalyses/PORSLA.png",height=10,width=12)
 ```
+
+
+# All selected traits
+
+```{r DistributionAllSelectedTraits,fig.height=14,fig.width=10,warning=F,message=F}
+p <- plot_grid(
+ggplot(data, aes(x= POR_htoct12)) + 
+  geom_histogram(binwidth = 20,fill="#B2182B",alpha=0.7) +  
+  theme_bw() +
+  labs(x="Height (Fundão, 20 months, mm)",y=""),
+
+ggplot(data, aes(x= BDX_htnov13)) + 
+  geom_histogram(binwidth = 20, fill="#D73027",alpha=0.7) +  
+  theme_bw() + 
+  labs(x="Height (Pierroton, 25 months, mm)",y=""),
+
+ggplot(data, aes(x= BDX_htnov18)) + 
+  geom_histogram(binwidth = 20, fill="#F46D43",alpha=0.7) +  
+  theme_bw() + 
+  labs(x="Height (Pierroton, 85 months, mm)",y=""),
+
+ggplot(data, aes(x= AST_htnov12)) + 
+  geom_histogram(binwidth = 20, fill="#FDAE61",alpha=0.7) +  
+  theme_bw() + 
+  labs(x="Height (Asturias, 21 months, mm)",y=""),
+
+ggplot(meanBB,aes(x= mean)) + 
+  geom_histogram(binwidth = 10,fill="#5AAE61",alpha=0.7) +  
+  theme_bw() + 
+  labs(x="Mean bud burst date (Pierroton, over four years, °C-day)",y=""),
+
+ggplot(meanDBB,aes(x= mean)) + 
+  geom_histogram(binwidth = 10,fill="#A6DBA0",alpha=0.7) +  
+  theme_bw() + 
+  labs(x="Mean duration of bud burst (Pierroton, over three years, °C-day)",y=""),
+
+ggplot(data, aes(x= log(POR_SLA))) + 
+  geom_histogram(binwidth = 0.01,fill="#4575B4",alpha=0.7) +  
+  theme_bw() + 
+  labs(x=TeX("Surface Leaf Area (Fundão, m$^{2}$/kg)"),y=""),
+
+ggplot(data, aes(x= d13C)) + 
+  geom_histogram(binwidth = 0.1,fill="#ABD9E9",alpha=0.7) +  
+  theme_bw() + 
+  labs(x=TeX("$\\delta^{13}C$ (Fundão, ‰)"),y=""),
+
+nrow=4)
+
+p
+
+ggsave(p,file=paste0("figs/ExploratoryAnalyses/TraitsDistribution.png"),width = 10,height=8)
+```
+
+```{r TableSuppInfoPhenoData}
+# the numbers in the columns "Trees", "Populations" and "Clones" were checked with the model inputs (May 12th)
+tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud burst","Surface Leaf Area","$\\delta^{13}$C"),
+       
+       "Common gardens"=c("Fundão","Cabada",rep("Pierroton",4),rep("Fundão",2)),
+       
+       "Dates of measurement" =c("October 2012","November 2012","November 2013", "November 2018", "2013, 2014, 2015, 2017", "2014, 2015 2017", NA,NA),
+       
+       "Tree age"=c(20,21,25,85,27,27,NA,NA),
+       
+       "Units"=c(rep("mm",4),"°C-day","°C-day","m$^{2}$/kg","‰"),
+       
+       "Trees"=c(length(data$tree[!is.na(data$POR_htoct12)]),  # height Fundão (Portugal) 2012
+                 length(data$tree[!is.na(data$BDX_htnov13)]),  # height Pierroton 2013
+                 length(data$tree[!is.na(data$BDX_htnov18)]),  # height Pierroton 2018
+                 length(data$tree[!is.na(data$AST_htnov12)]),  # height Cabada (Asturias) 2012
+                 length(meanBB$tree[!is.na(meanBB$mean)]),     # mean bud burst date Pierroton
+                 length(meanDBB$tree[!is.na(meanDBB$mean)]),   # mean duration bud burst Pierroton
+                 length(data$tree[!is.na(data$POR_SLA)]),      # SLA Fundão 
+                 length(data$tree[!is.na(data$d13C)])),        # delta 13 C Fundão 
+       
+        "Populations" = c(length(unique(data$prov[!is.na(data$POR_htoct12)])), # height Portugal 2012
+                          length(unique(data$prov[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
+                          length(unique(data$prov[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                          length(unique(data$prov[!is.na(data$AST_htnov12)])), # height Asturias 2012
+                          length(unique(meanBB$prov[!is.na(meanBB$mean)])),    # mean bud burst date Pierroton
+                          length(unique(meanDBB$prov[!is.na(meanDBB$mean)])),  # mean duration bud burst Pierroton
+                          length(unique(data$prov[!is.na(data$POR_SLA)])),     # SLA Fundão 
+                          length(unique(data$prov[!is.na(data$d13C)]))),       # delta 13 C Fundão 
+                          
+        "Clones" = c(length(unique(data$clon[!is.na(data$POR_htoct12)])), # height Portugal 2012
+                     length(unique(data$clon[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
+                     length(unique(data$clon[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                     length(unique(data$clon[!is.na(data$AST_htnov12)])), # height Asturias 2012
+                     length(unique(meanBB$clon[!is.na(meanBB$mean)])),    # mean bud burst date Pierroton
+                     length(unique(meanDBB$clon[!is.na(meanDBB$mean)])),  # mean duration bud burst Pierroton
+                     length(unique(data$clon[!is.na(data$POR_SLA)])),     # SLA Fundão 
+                     length(unique(data$clon[!is.na(data$d13C)]))),       # delta 13 C Fundão   
+       
+        "Blocks" = c(length(unique(data$block[!is.na(data$POR_htoct12)])), # height Portugal 2012
+                     length(unique(data$block[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
+                     length(unique(data$block[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                     length(unique(data$block[!is.na(data$AST_htnov12)])), # height Asturias 2012
+                     length(unique(meanBB$block[!is.na(meanBB$mean)])),    # mean bud burst date Pierroton
+                     length(unique(meanDBB$block[!is.na(meanDBB$mean)])),  # mean duration bud burst Pierroton
+                     length(unique(data$block[!is.na(data$POR_SLA)])),     # SLA Fundão 
+                     length(unique(data$block[!is.na(data$d13C)])))        # delta 13 C Fundão   
+          ) %>% 
+  
+  kable(caption="Table XX of the paper",escape = FALSE) %>%
+  
+  kable_styling(latex_options =c("striped", "hold_position"))
+```
+
+
+
