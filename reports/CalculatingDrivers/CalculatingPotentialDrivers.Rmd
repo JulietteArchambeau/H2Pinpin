@@ -62,16 +62,25 @@ library(kableExtra) # CRAN v1.1.0
 library(ggbiplot)   # [github::vqv/ggbiplot] v0.55 # For the PCA
 library(kableExtra) # CRAN v1.1.0
 library(hierfstat)  # CRAN v0.04-22
-library(matrixcalc)
+library(matrixcalc) # CRAN v1.0-3
+library(latex2exp)  # CRAN v0.4.0
 ```
 
-In this document, we calculate 6 variables standing for 6 potential drivers of the within-population genetic variation:
+In this document, we calculate eight indexs standing for eight potential drivers of the within-population genetic variation:
 
   -  **Population admixture** scores $A$ and $D$. $A$ is the raw proportion of admixture for each population (i.e. the proportion of the population genome coming from "foreign" gene pools). $D$ is a the proportion of admixture weighted by the divergence between the source and sink gene pools, i.e. the proportion of belonging to each source gene pool weighted by the divergence between the source and sink gene pool.
   
-  - **Climate harshness** indexes $SHM$ (summer heat moisture index) and $EMT$ (extreme minimum temperature).
+  - **Climate harshness** indexes $SHM$ (summer heat moisture index) and $invEMT$ (the inverse of the extreme minimum temperature over the period 1901-1950).
   
-  - **Environmental heterogeneity** indexes $EH$ and $EHW$ (4 indexes).
+  - **Environmental heterogeneity** indexes. To calculate these indexes, we selected the raster cells in the 20-km radius around the population locations, performed a PCA based on the cell values of the environmental variables (soil, topographic and climatic variables) and extracted the PC1 and PC2 scores for each cell. With that, we calculated different indexes and selected four for the paper:
+  
+    - EH1[20km] the environmental heterogeneity of the **PC1 score** in a **20-km** radius around the population location.
+    
+    - EH2[20km] the environmental heterogeneity of the **PC2 score** in a **20-km** radius around the population location.
+    
+    - EH1[1.6km] the environmental heterogeneity of the **PC1 score** in a **1.6-km** radius around the population location.
+    
+    - EH2[1.6km] the environmental heterogeneity of the **PC2 score** in a **1.6-km** radius around the population location.
 
 
 ***
@@ -89,7 +98,7 @@ df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
 df <- df[!(df$prov=="ROD"|df$prov=="MAD"),]
 colnames(df) <- c("prov","longitude","latitude")
 
-# Create a spatial object of the provenance coordinates 
+                    # Create a spatial object of the provenance coordinates 
 xyprov <- SpatialPoints(df[,c("longitude","latitude")], 
                         proj4string=CRS("+proj=longlat +datum=WGS84"))
 
@@ -421,7 +430,7 @@ In the article and the rest of the document, we will use the **buffer areas of 2
 
 
 
-## Creating a mask of the forested areas
+# Creating a mask of the forested areas
 
 ```{r VariableUsedForExtentResolutionOfTheMask, eval=F}
 # Load a raster of one variable that will be used to set the resolution and extent of the mask
@@ -513,7 +522,7 @@ gdal_translate -of GTiff sagafiles/EuropeForestAreas.sdat EuropeForestAreas.tif
 # Load the mosaic of forested areas tiles
 rast <- raster("data/ForestedAreas/ForestedAreasMasks/EuropeForestAreas.tif")
 
-# Create a mask at 1000 m resolution and CRS ETRS89-LAEA Europe
+                    # Create a mask at 1000 m resolution and CRS ETRS89-LAEA Europe
 eu.mask <- crop(rast,extent(prc01)) 
 eu.mask <- raster::resample(eu.mask,prc01) 
 eu.mask <- mask(prc01,eu.mask)
@@ -602,7 +611,7 @@ submor <- gIntersection(submor,buffer, byid=TRUE)
 plot(out, col="green", bg="white")
 plot(xyprov,add=T)
 
-# Create the Moroccan mask at 1000m resolution
+                    # Create the Moroccan mask at 1000m resolution
 mor.mask <- crop(prc01,extent(submor)) 
 mor.mask <- mask(mor.mask,submor,updatevalue=NA)
 
@@ -766,13 +775,15 @@ tab <- readRDS(file="data/DF_EnvHetero.rds")
 pca <- prcomp(tab[,-1], center = TRUE, scale. = TRUE) # centered and scaled PCA
 
 p <- ggbiplot(pca,obs.scale = 1, var.scale = 1, 
-         varname.size =5,alpha = 0.3,labels.size = 10,
+         varname.size =4,alpha = 0.1,#labels.size = 10,
          varname.adjust = 1.5) + 
   theme_bw() +
   theme(plot.title = element_text(size=18),
         axis.title = element_text(size=18),
         axis.text = element_text(size=12))
 p
+
+ggsave(p,file="figs/CalculatingDrivers/PCA_EnvHetero.png",width=15,height=12)
 ```
 
 We **assign the PC1 and PC2 scores** to the cells on the map. 
@@ -799,13 +810,15 @@ df <- df %>% mutate(long.laea = xyprov@coords[,1],lat.laea = xyprov@coords[,2])
 ```
 
 
-### 20-km radius
 
-We first calculate $EH$ for each population as the variance of cell values in the 20-km radius, such as:
+
+We first calculate $EH$ for each population as the variance of cell values in the 20-km and 1.6-km radius, such as:
 
 $$ EH = \frac{\sum_{ij}(x_{ij} - \bar{x})^2}{n-1}$$
 
-where $i$ and $j$ are the geographical coordinates of the cells being considered, $x_{ij}$ is the value of the PC1 score at cell $[i,j]$, $\bar{x}$ is the weighted mean for the 20-km radius region. 
+where $i$ and $j$ are the geographical coordinates of the cells being considered, $x_{ij}$ is the value of the PC1 (or PC2) score at cell $[i,j]$, $\bar{x}$ is the weighted mean for the 20-km (or 1.6-km) radius region.
+
+### 20-km radius
 
 ```{r CalculateEH}
 # We are going to extract the cell values of the cells in the 20-km radius around the population location
@@ -1054,6 +1067,16 @@ df %>%
   column_spec(1, bold = T)
 ```
 
+<span style="color: red;">Here is the correspondence between the variable names in this document and the variable names in the paper:</span>
+
+  - <span style="color: red;">`EH.20km.PC1` => **EH1[20km]**</span>
+  
+  - <span style="color: red;">`EH.20km.PC2` => **EH2[20km]**</span>
+
+  - <span style="color: red;">`EH.1.6km.PC1` => **EH1[1.6km]**</span>
+  
+  - <span style="color: red;">`EH.1km.PC2` => **EH2[1.6km]**</span>
+
 
 ## Visualization
 
@@ -1182,7 +1205,7 @@ corEHWVNumerator <- cor(df[,"EHW"],df[,"NumeratorEHW"])
   #   - correlation between $EHW$ and the numerator and denominator of $EHW$: $\rho =$ `r corEHWVNumerator` and $\rho =$ `r corEHWDenominator`.
 ```
 
-<span style="color: red;">In the following analyses, we are going to use $EH$ at 20-km radius for both PC1 and PC2 and $EH$ at 1.6-km radius for both PC1 and PC2 too.</span>
+<span style="color: red;">In the following analyses, we are going to use $EH$ at 20-km radius for both PC1 and PC2 scores (**EH1[20km]** and **EH2[20km]**) and $EH$ at 1.6-km radius for both PC1 and PC2 too (**EH1[1.6km]** and **EH2[1.6km]**).</span>
 
 
 # Climate harshness
@@ -1205,15 +1228,16 @@ df %>%
 
 ## Extreme minimum temperature
 
-$EMT$: he extreme minimum temperature over the period considered (1901-1950)
+$EMT$: the extreme minimum temperature over the period considered (1901-1950). For intepretation, we are going to use $invEMT$ ($=-EMT$).
 
 ```{r ExtractEMT}
 var <- "EMT"
 rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",var,".tif"))
-df[,var] <- extract(rast.var, xyprov) #
+df[,var] <- extract(rast.var, xyprov) # EMT
+df[,paste0("inv",var)] <- extract(rast.var, xyprov) * (-1) # change the sign of EMT to ease interpretation
 df %>% 
-  dplyr::select(prov,EMT) %>% 
-  arrange(by=EMT) %>% 
+  dplyr::select(prov,invEMT) %>% 
+  arrange(by=invEMT) %>% 
   kable() %>%
   kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
@@ -1223,14 +1247,26 @@ df %>%
 
 ```{r CorrelationsAllDrivers}
 df %>% dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
-                     #EHW.20km.PC1,EHW.20km.PC2,
-                     EH.1km.PC1,EH.1km.PC2,SHM,EMT) %>% 
+                     EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
   cor() %>% 
   lower.triangle() %>% 
   kable(digits=3) %>%
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
+```
+
+
+```{r CorrelationsAllDriversTableLatex, echo=F,eval=F}
+# Here the code to get the latex code of the table
+options(knitr.table.format = "latex")
+df %>% 
+  dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
+                     EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+  cor() %>% 
+  lower.triangle() %>% 
+  kable(digits=3,"latex") %>% 
+  kable_styling(latex_options =c("striped", "hold_position"))
 ```
 
 
