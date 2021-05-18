@@ -180,6 +180,21 @@ DownloadData <- function(trait){
   
   return(c(list.trait,list.stan))
 }
+
+
+ExtractParam <- function(x)  {
+  readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=(param),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Xp=drivers,
+         Traits=x)
+}
 ```
 
 
@@ -249,7 +264,13 @@ saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))
 ## $\beta_{X}$
 
 ```{r BetaXTraitSpecificFigure,eval=F}
-p <- mclapply(list.models, function(x) broom::tidyMCMC(x,pars=("betaX"),
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+
+mclapply(traits, function(x){
+d <-readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=("betaX"),
               droppars = NULL, 
               estimate.method = point.est, 
               ess = F, 
@@ -257,44 +278,40 @@ p <- mclapply(list.models, function(x) broom::tidyMCMC(x,pars=("betaX"),
               conf.int = T,
               conf.level = conf.level)) %>% 
   bind_rows() %>% 
-  mutate(Xp=names(list.models)) %>% 
-  ggplot(aes(x = Xp, y = estimate)) +
-  geom_linerange(aes(x = Xp, ymin = conf.low, ymax = conf.high)) +
-  geom_point(size = 2) +
-  ylab(TeX("Estimation of $\\beta_{X}$")) + xlab("") +
-  labs(subtitle="95% credible intervals & Median",
-       title=paste0("Trait: ",trait)) +
-  scale_x_discrete(labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
-  coord_flip() +
-  theme_bw() +
-  theme(axis.text = element_text(size=16),axis.title = element_text(size=16))
+  mutate(Xp=drivers)
+  
+d$Xp <- as.factor(d$Xp)
+d$Xp <- factor(d$Xp,levels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM"))
 
-p
-ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_BetaX.png"),height=7,width=9)
+
+p <- ggplot(d,aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Xp)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=5,size=5) +
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_x_discrete(labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" )) +
+  #coord_flip() +
+  theme_bw() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.position = "none")
+
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_BetaX.png"),height=8,width=12)
+
+})
 ```
 
 
 ```{r BetaXAllTraitsFigure}
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
+param <- "betaX"
 
-ExtractBetaX <- function(x)  {
-  readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
-  mclapply(function(x) broom::tidyMCMC(x,pars=("betaX"),
-                droppars = NULL, 
-                estimate.method = point.est, 
-                ess = F, 
-                rhat = F, 
-                conf.int = T,
-                conf.level = conf.level)) %>% 
-  bind_rows() %>% 
-  mutate(Xp=drivers,
-         Traits=x)
-}
-
-df.betaX <- mclapply(traits,ExtractBetaX) %>% 
-  bind_rows()
-
+df.betaX <- mclapply(traits,ExtractParam) %>% bind_rows()
 
 # Option 1
 df.betaX$Traits <- as.factor(df.betaX$Traits)
@@ -332,8 +349,8 @@ ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX.png",height=10,width
 
 # Option 2
 p <- df.betaX %>% 
-  mutate(Hyp=case_when(Xp=="A"~"Demographic history",
-                       Xp=="D"~"Demographic history",
+  mutate(Hyp=case_when(Xp=="A"~"Admixture",
+                       Xp=="D"~"Admixture",
                        Xp=="EH1[20km]"~"Environmental heterogeneity",
                        Xp=="EH2[20km]"~"Environmental heterogeneity",
                        Xp=="EH1[1.6km]"~"Environmental heterogeneity",
@@ -367,8 +384,8 @@ ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid.png",heigh
 
 
 df.betaX  <- df.betaX %>%
-  mutate(Hyp=case_when(Xp=="A"~"Demographic history",
-                       Xp=="D"~"Demographic history",
+  mutate(Hyp=case_when(Xp=="A"~"Admixture",
+                       Xp=="D"~"Admixture",
                        Xp=="EH1[20km]"~"Environmental heterogeneity",
                        Xp=="EH2[20km]"~"Environmental heterogeneity",
                        Xp=="EH1[1.6km]"~"Environmental heterogeneity",
@@ -384,7 +401,7 @@ df.betaX  <- df.betaX %>%
 #   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
 #   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5) +
 #   facet_grid(.~Hyp,scales="free", space = "free") + 
-#   #facet_grid(~fct_relevel(Hyp,"Demographic history","Climate harshness","Environmental heterogeneity"))
+#   #facet_grid(~fct_relevel(Hyp,"Admixture","Climate harshness","Environmental heterogeneity"))
 #   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
 #   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
 #                      labels = rev(c("Height (Fundão, 20 months)",
@@ -412,12 +429,15 @@ df.betaX  <- df.betaX %>%
 # Option 4
 df.betaX$Xp <- factor(df.betaX$Xp,
                       levels=c("SHM","invEMT","EH1[20km]","EH1[1.6km]","EH2[20km]","EH2[1.6km]","D","A"))
+df.betaX$Hyp <- as.factor(df.betaX$Hyp)
+df.betaX$Hyp <- df.betaX$Hyp <- factor(df.betaX$Hyp,levels=c("Climate harshness","Admixture","Environmental heterogeneity"))
+
 
 p <- df.betaX %>% 
   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
-  #facet_grid(~fct_relevel(Hyp,"Demographic history","Climate harshness","Environmental heterogeneity"))
+  #facet_grid(~fct_relevel(Hyp,"Admixture","Climate harshness","Environmental heterogeneity"))
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   #coord_flip() +
   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
@@ -447,6 +467,10 @@ p
 
 ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid_Reverse_LegendBottomLeft.png",height=8,width=14)
 
+df.betaX$Hyp <- factor(df.betaX$Xp,
+                      levels=c("SHM","invEMT","EH1[20km]","EH1[1.6km]","EH2[20km]","EH2[1.6km]","D","A"))
+
+
 # Option 5
 # For the paper, figure with not all the drivers
 p <- df.betaX %>% 
@@ -454,7 +478,7 @@ p <- df.betaX %>%
   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
-  #facet_grid(~fct_relevel(Hyp,"Demographic history","Climate harshness","Environmental heterogeneity"))
+  #facet_grid(~fct_relevel(Hyp,"Admixture","Climate harshness","Environmental heterogeneity"))
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   #coord_flip() +
   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
@@ -473,7 +497,7 @@ p <- df.betaX %>%
         axis.title = element_text(size=16),
       legend.title=element_text(size=13), 
       legend.text=element_text(size=10),
-      legend.position = c(.14, .185),
+      legend.position = c(.142, .185),
       legend.background = element_rect(colour = "grey"),
       strip.text.x = element_text(size = 14),
       panel.grid.minor.x=element_blank(),
@@ -714,4 +738,66 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),heigh
 ```
 
 
+## $\mathcal{R}^{2}$
+
+
+```{r}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
+param <- "R_squared"
+
+df <- traits %>% 
+  mclapply(ExtractRsquared) %>% 
+  bind_rows() %>%
+  mutate(trait.class=case_when(Traits=="POR_htoct12"~"Height",
+                       Traits=="BDX_htnov13"~"Height",
+                       Traits=="BDX_htnov18"~"Height",
+                       Traits=="AST_htnov12"~"Height",
+                       Traits=="MeanBB"~"Phenology",
+                       Traits=="MeanDBB"~"Phenology",
+                       Traits=="POR_SLA"~"Functional traits",
+                       Traits=="d13C"~"Functional traits"),
+         trait.names=case_when(Traits=="POR_htoct12"~"Fundão 20m",
+                       Traits=="BDX_htnov13"~"Pierroton 25m",
+                       Traits=="BDX_htnov18"~"Pierroton 85m",
+                       Traits=="AST_htnov12"~"Asturias 21m",
+                       Traits=="MeanBB"~"MeanBB",
+                       Traits=="MeanDBB"~"MeanDBB",
+                       Traits=="POR_SLA"~"SLA",
+                       Traits=="d13C"~"d13C"))
+
+df$Traits <- as.factor(df$Traits)
+df$Traits <- factor(df$Traits,levels=c(traits))
+df$Xp <- as.factor(df$Xp)
+df$Xp <- factor(df$Xp,levels=rev(c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")))
+
+# Option 4
+p <- df %>% 
+  ggplot(aes(x = trait.names, y = estimate,ymin = conf.low, ymax = conf.high,color=Xp)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,alpha=0.6) +
+  facet_grid(.~trait.class,scales="free", space = "free") + 
+  #facet_grid(~fct_relevel(Hyp,"Admixture","Climate harshness","Environmental heterogeneity"))
+  ylab(TeX("$R^{2}$")) + xlab("") +
+  labs(color = "Potential drivers") +
+  scale_color_manual(values=rev(c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ))) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.88, .19),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=2,reverse=T))
+    
+p
+
+ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Rsquared.png",height=7,width=12)
+```
 
