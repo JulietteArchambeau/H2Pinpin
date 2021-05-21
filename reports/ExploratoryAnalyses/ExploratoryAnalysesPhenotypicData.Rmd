@@ -57,6 +57,7 @@ library(tidyverse)  # CRAN v1.3.0
 library(latex2exp)  # CRAN v0.4.0
 library(cowplot)    # CRAN v1.0.0
 library(kableExtra) # CRAN v1.1.0
+library(grid)
 ```
 
 
@@ -769,46 +770,153 @@ ggsave(p,file="figs/ExploratoryAnalyses/PORSLA.png",height=10,width=12)
 # All selected traits
 
 ```{r DistributionAllSelectedTraits,fig.height=14,fig.width=10,warning=F,message=F}
+fontsize=8
+ymean = 0.82
+yvar = 0.92
+
 p <- plot_grid(
+  # Height Fundão (Portugal) 2012
 ggplot(data, aes(x= POR_htoct12)) + 
   geom_histogram(binwidth = 20,fill="#B2182B",alpha=0.7) +  
   theme_bw() +
-  labs(x="Height (Fundão, 20 months, mm)",y=""),
+  labs(x="Height (Fundão, 20 months, mm)",y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(data$POR_htoct12,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(data$POR_htoct12,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
 
+  # Height Pierroton 2013
 ggplot(data, aes(x= BDX_htnov13)) + 
   geom_histogram(binwidth = 20, fill="#D73027",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Height (Pierroton, 25 months, mm)",y=""),
+  labs(x="Height (Pierroton, 25 months, mm)",y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(data$BDX_htnov13,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(data$BDX_htnov13,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
 
+  # Height Pierroton 2018
 ggplot(data, aes(x= BDX_htnov18)) + 
   geom_histogram(binwidth = 20, fill="#F46D43",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Height (Pierroton, 85 months, mm)",y=""),
-
+  labs(x="Height (Pierroton, 85 months, mm)",y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(data$BDX_htnov18,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(data$BDX_htnov18,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
+  
+  # Height Cabada (Asturias) 2012
 ggplot(data, aes(x= AST_htnov12)) + 
   geom_histogram(binwidth = 20, fill="#FDAE61",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Height (Asturias, 21 months, mm)",y=""),
+  labs(x="Height (Asturias, 21 months, mm)",y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(data$AST_htnov12,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(data$AST_htnov12,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
 
+  # Mean bud burst date Pierroton
 ggplot(meanBB,aes(x= mean)) + 
   geom_histogram(binwidth = 10,fill="#5AAE61",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Mean bud burst date (Pierroton, over four years, °C-day)",y=""),
+  labs(x="Mean bud burst date (Pierroton, over four years, °C-day)",y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(meanBB$mean,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(meanBB$mean,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
 
+  # Mean duration bud burst Pierroton
 ggplot(meanDBB,aes(x= mean)) + 
   geom_histogram(binwidth = 10,fill="#A6DBA0",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Mean duration of bud burst (Pierroton, over three years, °C-day)",y=""),
+  labs(x="Mean duration of bud burst (Pierroton, over three years, °C-day)",y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(meanDBB$mean,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(meanDBB$mean,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
 
+  # SLA Fundão 
 ggplot(data, aes(x= log(POR_SLA))) + 
   geom_histogram(binwidth = 0.01,fill="#4575B4",alpha=0.7) +  
   theme_bw() + 
-  labs(x=TeX("Surface Leaf Area (Fundão, m$^{2}$/kg)"),y=""),
-
+  labs(x=TeX("Log(Surface Leaf Area) (Fundão, m$^{2}$/kg)"),y="") +
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(log(data$POR_SLA),na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(log(data$POR_SLA),na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
+  # delta 13 C Fundão 
 ggplot(data, aes(x= d13C)) + 
   geom_histogram(binwidth = 0.1,fill="#ABD9E9",alpha=0.7) +  
   theme_bw() + 
-  labs(x=TeX("$\\delta^{13}C$ (Fundão, ‰)"),y=""),
+  labs(x=TeX("$\\delta^{13}C$ (Fundão, ‰)"),y="")+
+  annotation_custom(grobTree(textGrob(paste0("Variance : ",
+                                             round(var(data$d13C,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=yvar, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))) +
+  annotation_custom(grobTree(textGrob(paste0("Mean : ",
+                                             round(mean(data$d13C,na.rm=T),2)), 
+                                      x=0.7,  
+                                      y=ymean, 
+                                      hjust=0,
+                                      gp=gpar(fontsize=fontsize)))),
 
 nrow=4)
 
