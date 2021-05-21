@@ -821,25 +821,25 @@ ggsave(p,file=paste0("figs/ExploratoryAnalyses/TraitsDistribution.png"),width = 
 # the numbers in the columns "Trees", "Populations" and "Clones" were checked with the model inputs (May 12th)
 tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud burst","Surface Leaf Area","$\\delta^{13}$C"),
        
-       "Common gardens"=c("Fundão","Cabada",rep("Pierroton",4),rep("Fundão",2)),
+       "Common gardens"=c("Fundão",rep("Pierroton",2),"Cabada",rep("Pierroton",2),rep("Fundão",2)),
        
-       "Dates of measurement" =c("October 2012","November 2012","November 2013", "November 2018", "2013, 2014, 2015, 2017", "2014, 2015 2017", NA,NA),
+       "Dates of measurement" =c("October 2012","November 2013", "November 2018","November 2012", "2013, 2014, 2015, 2017", "2014, 2015 2017", NA,NA),
        
-       "Tree age"=c(20,21,25,85,27,27,NA,NA),
+       "Tree age"=c(20,25,85,21,"-","-",NA,NA),
        
        "Survival"=c(
       # Proportion survival Portugal 
       round(table(data$POR_survoct12)[[2]]/(table(data$POR_survoct12)[[1]]+table(data$POR_survoct12)[[2]]),2),
       
-      # Proportion survival Asturias
-      round(table(data$AST_survnov12)[[2]]/(table(data$AST_survnov12)[[1]]+table(data$AST_survnov12)[[2]]),2),
-
        # Proportion survival Pierroton 2013
        round(table(data$BDX_surv13)[[2]]/(table(data$BDX_surv13)[[1]]+table(data$BDX_surv13)[[2]]),2),
        
        # Proportion survival Pierroton 2018
        round(table(data$BDX_surv18)[[2]]/(table(data$BDX_surv18)[[1]]+table(data$BDX_surv18)[[2]]),2),
-       
+      
+      # Proportion survival Asturias
+      round(table(data$AST_survnov12)[[2]]/(table(data$AST_survnov12)[[1]]+table(data$AST_survnov12)[[2]]),2),
+ 
        "-","-","-","-"),
       
        "Units"=c(rep("mm",4),"°C-day","°C-day","m$^{2}$/kg","‰"),
