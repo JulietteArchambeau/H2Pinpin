@@ -64,6 +64,7 @@ library(kableExtra) # CRAN v1.1.0
 library(hierfstat)  # CRAN v0.04-22
 library(matrixcalc) # CRAN v1.0-3
 library(latex2exp)  # CRAN v0.4.0
+options(knitr.table.format = "latex")
 ```
 
 In this document, we calculate eight indexs standing for eight potential drivers of the within-population genetic variation:
