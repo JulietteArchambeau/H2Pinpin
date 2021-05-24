@@ -801,3 +801,88 @@ p
 ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Rsquared.png",height=7,width=12)
 ```
 
+
+
+# Correlation btw the number of clones per pop and $\sigma^{2}_{C_{p}}$
+
+```{r CorrealtionNumberClones}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  arrange(by=tree) %>% 
+  distinct(prov) %>% 
+  pull()
+
+# Extrating the sigma2_clon (i.e. within-population genetic variation)
+sigma2_clon <- mclapply(traits,function(x){
+  
+  readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("sigma2_clon"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prov=rep(provs,8)) }) %>% 
+    setNames(traits)
+
+
+# Extracting the number of clones per population
+NbClonePerProv <- function(trait){
+
+  drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
+    dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+    dplyr::mutate(across(-prov,scale))
+  
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+      
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::select(prov,clon) %>% 
+    distinct(.) %>% 
+    group_by(prov) %>% 
+    dplyr::summarise(count=n())
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    dplyr::select(prov,clon) %>% 
+    distinct(.) %>% 
+    group_by(prov) %>% 
+    dplyr::summarise(count=n())
+  
+  }}
+
+count <- mclapply(traits,NbClonePerProv) %>% setNames(traits)
+
+drivers <- c("A","D", "EH.20km.PC1","EH.20km.PC2","EH.1km.PC1","EH.1km.PC2","SHM","invEMT") 
+
+df <- mclapply(traits, function(x){
+  mclapply(drivers,function(driver)
+  cor(count[[x]]$count,sigma2_clon[[x]]$estimate[sigma2_clon[[x]]$Drivers==driver])
+  ) %>% 
+  setNames(drivers)
+}) %>% 
+  setNames(traits) %>% 
+  bind_rows(.id="Traits") %>% 
+  gather(Driver, val, 2:ncol(.)) %>%
+  spread(Traits, val) %>% 
+  dplyr::select(Driver,POR_htoct12,BDX_htnov13,BDX_htnov18,AST_htnov12,MeanBB ,MeanDBB, POR_SLA, d13C) %>% 
+  dplyr::mutate(Driver=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM"))
+
+
+# Get the table in latex for the Supplementary Information
+df %>% kable(digits=3,"latex")
+```
