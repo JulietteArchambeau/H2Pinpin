@@ -1,0 +1,569 @@
+---
+title: "Associating within-population genetic variation with potential underlying drivers"
+subtitle: "Simulations"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=F)
+options(width = 300)
+library(knitr)      # CRAN v1.26
+library(reshape2)   # CRAN v1.4.4
+library(dplyr)      # CRAN v1.0.0
+library(tidyverse)  # CRAN v1.3.0
+library(kableExtra) # CRAN v1.1.0
+library(rstan)      # CRAN v2.19.2
+library(latex2exp)    # CRAN v0.4.0
+library(broom)      # CRAN v0.5.2
+library(bayesplot)  # CRAN v1.7.1
+theme_set(theme_bw(base_size = 20))
+color_scheme_set("green")
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+# options(knitr.table.format = "latex")
+```
+
+# Introduction and model equations
+
+In this document, we simulate some data to test the model ability to accurately estimate two parameters of interest: the coefficient $\beta_X$ of the potential drivers of the within-population genetic variation (i.e. variation among clones) and the standard deviation $\sigma_K$ of the within-population genetic variation.
+
+We tried two models: one with the effect of the potential drivers applying on the mean of the within-population genetic variation, the other on the median. Here are the two model equations.
+
+**Model 1 (effect on the median)**
+
+\begin{equation}
+\begin{aligned}
+y_{bpcr} & \sim  \mathcal{N}(\mu_{bpc},\sigma^{2}_{r})\\[3pt]
+\mu_{bpc} & =  \beta_{0} +  B_{b} + P_{p} + C_{c(p)}\\[3pt]
+\beta_{0} & \sim \mathcal{N}(\mu_{y},2)\\[3pt]
+\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix} 
+    &\sim \mathcal{N}\left(0,
+\begin{bmatrix}
+\sigma^{2}_{B}\\[3pt]
+\sigma^{2}_{P}\\
+\end{bmatrix}
+\right)\\[3pt]
+C_{c(p)} & \sim \mathcal{N}(0,\sigma^{2}_{C_{p}})\\[3pt]
+\overline{\sigma_{C_{p}}^{2}} & = \frac{\sum_{p=1}^{33} \sigma_{C_{p}}^{2}}{33} \\[3pt]
+\sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \overline{\sigma_{C_{p}}^{2}} + \sigma_{P}^{2}\\[3pt]
+\sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{1})\\[3pt]
+\sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{2})\\[3pt]
+\sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{3})\\[3pt]
+\sigma_{C_{p}} & \sim \mathcal{LN}\left(\ln\left(\sigma_{tot} \times  \sqrt(\pi_{4})\right)-\frac{\sigma^{2}_{K}}{2} + \beta_{x}X_{p},\sigma^{2}_{K}\right)\\[3pt]
+\sigma_{K} & \sim \exp(1)\\[3pt]
+\sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
+\end{aligned}
+\end{equation}
+
+**Model 2 (effect on the mean)**
+
+\begin{equation}
+\begin{aligned}
+y_{bpcr} & \sim  \mathcal{N}(\mu_{bpc},\sigma^{2}_{r})\\[3pt]
+\mu_{bpc} & =  \beta_{0} +  B_{b} + P_{p} + C_{c(p)}\\[3pt]
+\beta_{0} & \sim \mathcal{N}(\mu_{y},2)\\[3pt]
+\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix} 
+    &\sim \mathcal{N}\left(0,
+\begin{bmatrix}
+\sigma^{2}_{B}\\[3pt]
+\sigma^{2}_{P}\\
+\end{bmatrix}
+\right)\\[3pt]
+C_{c(p)} & \sim \mathcal{N}(0,\sigma^{2}_{C_{p}})\\[3pt]
+\overline{\sigma_{C_{p}}^{2}} & = \frac{\sum_{p=1}^{33} \sigma_{C_{p}}^{2}}{33} \\[3pt]
+\sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \overline{\sigma_{C_{p}}^{2}} + \sigma_{P}^{2}\\[3pt]
+\sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{1})\\[3pt]
+\sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{2})\\[3pt]
+\sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{3})\\[3pt]
+\sigma_{C_{p}} & \sim \mathcal{LN}\left(\ln\left(\sigma_{tot} \times  \sqrt(\pi_{4}) + \beta_{x}X_{p} \right)-\frac{\sigma^{2}_{K}}{2},\sigma^{2}_{K}\right)\\[3pt]
+\sigma_{K} & \sim \exp(1)\\[3pt]
+\sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
+\end{aligned}
+\end{equation}
+
+
+
+Comments for the log-normal:
+\begin{equation}
+\begin{aligned}
+\sigma_{C_{p}} \sim \mathcal{LN}(\mu,\sigma^{2}) & \Leftrightarrow \ln(\sigma_{C_{p}}) \sim \mathcal{N}(\mu,\sigma^{2})\\[3pt]
+\text{By definition: } \mathbb{E}(\sigma_{C_{p}}) & = \exp\left(\mu + \frac{\sigma^{2}}{2}\right)\\[3pt]
+\text{We want: } \mathbb{E}(\sigma_{C_{p}}) & = \exp\left(\mu + \frac{\sigma^{2}}{2}\right) = \sigma_{tot} \times  \sqrt(\pi_{4})\\[3pt]
+\text{Therefore: } \mu & = \ln\left(\sigma_{tot} \times  \sqrt(\pi_{4})\right) - \frac{\sigma^{2}}{2}\\
+\end{aligned}
+\end{equation}
+
+
+# Parameters and functions to simulate the data
+
+```{r Options}
+# The simulations are based on height measured in the common gardens, but here
+# we can choose on which common garden/year the simulations are based:
+ trait <- "POR_htoct12"   # Fundão (Portugal) - October 2012
+# trait <- "BDX_htnov13" # Pierroton (France) - November 2013
+# trait <- "BDX_htnov18" # Pierroton (France) - November 2018
+# trait <- "AST_htdec11" # Cabada (Asturias, Spain) - November 2012
+
+
+# Size of the simulated dataset
+nb.clones = "real-based"
+#nb.clones = 20 # 20 clones per population  (5280 trees, 33 populations, 20 clones per population) 
+
+
+# Which model? 
+which.model <- "model1"
+
+# betaX
+if(which.model=="model1") {
+  betaX <- 0.1
+} else if(which.model=="model2"){
+  betaX <- 1.2
+}
+
+# Variance of the log-normal (distribution of the within-population genetic variation)
+sigma_K <- 0.1
+
+# Options for model sampling
+n_chains <- 4
+n_iter <- 2500
+n_warm <- 1250
+n_thin <- 1
+save_warmup = FALSE 
+
+# option for the MCMC intervals
+point.est="median"
+prob.in <- 0.9
+prob.out <- 0.95
+
+# set.seed of the simulations
+nb.set.seed <- 44 # simulation 1
+#nb.set.seed <- 444 # simulation 2
+```
+
+
+```{r FunctionSimulData}
+#### Function to simulate the data ####
+
+SimulData <- function(trait,nb.set.seed){
+set.seed(nb.set.seed)
+
+# As we want to base our simulations on the real experimental design, 
+  # we load the trait data and extract the number of block, populations,
+  # clones per population and trees per clone: 
+df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  dplyr::rename(trait=all_of(trait)) %>% 
+  dplyr::select(prov,clon,tree,block,trait) %>% 
+  drop_na() %>% 
+  arrange(by=tree)
+
+# We keep the same trait mean as the real data:
+beta0 <- mean(df$trait)
+
+# Same for the standard deviation and variance of the trait:
+sigma_tot <- sqrt(var(df$trait))
+sigma2_tot <- var(df$trait)
+
+
+# If we don't want to base our simulations on the real experimental design, 
+  # we have to run these lines: we create a perfectly balanced dataset of 33 populations, 
+  # 20 clones per populations and 1 clone per block
+if(nb.clones==20){
+  
+vec.prov <- vector()
+for(i in unique(df$prov)){vec.prov <- c(vec.prov,rep(i,nb.clones*8))}
+
+vec.blocks <- vector()
+for(i in 1:8){vec.blocks <- c(vec.blocks,rep(i,nb.clones))}
+
+df <- tibble(prov=vec.prov,
+             clon=paste0(prov,rep(1:nb.clones,264)),
+             block=rep(vec.blocks,33),
+             tree=paste0(clon,"_",block))
+}
+
+
+# We want: Var(Pop) + Var(Block) + Var(Clone) + Var(Residual) = Var(total)
+sigma_prov <-  sqrt(sigma2_tot*0.15)    # Among populations variation explains 15% of the total variance
+sigma_block <-  sqrt(sigma2_tot*0.05)   # Among blocks variation explains 5% of the total variance
+sigma_r <- sqrt(sigma2_tot*0.5)         # Residuals explain 50% of the total variance
+mean_sigma_clon <- sqrt(sigma2_tot*0.3) # Among clones variation explains 30% of the total variance 
+#sigma_K <- sigma_K
+
+if(which.model=="model1"){  # Model 1
+# In the first model, the effect of the potential drivers is 
+  # on the median of the within-population genetic variation
+ 
+Xp <- rnorm(length(unique(df$prov)),mean=0,sd=1) # Potential driver that is mean-centered
+mu_sigma_clon <- log(mean_sigma_clon) - (sigma_K*sigma_K)/2  + betaX*Xp
+log_sigma_clon <-  rnorm(length(unique(df$prov)),mu_sigma_clon, sigma_K )
+sigma_clon <- exp(log_sigma_clon)
+
+} else if(which.model=="model2"){ # Model 2
+# In the second model, the effect of the potential drivers is
+  # on the mean of the within-population genetic variation
+
+Xp <- rnorm(length(unique(df$prov)),mean=0,sd=1)
+mu_sigma_clon <- log(mean_sigma_clon + betaX*Xp) - (sigma_K*sigma_K)/2 
+log_sigma_clon <-  rnorm(length(unique(df$prov)),mu_sigma_clon, sigma_K)
+sigma_clon <- exp(log_sigma_clon)
+}
+
+df <- df %>% 
+  inner_join(tibble(prov=unique(df$prov), # Population id
+             sigma_clon= sigma_clon, # within-population genetic variation (among glones variation)
+             Xp=Xp, # Potential driver of the within-population genetic variation
+             alpha_prov=rnorm(length(unique(df$prov)),mean=0,sd=sigma_prov)), # population varying intercepts
+             by="prov") 
+
+sub <- df %>% 
+  dplyr::select(clon,alpha_prov,sigma_clon) %>% 
+  distinct()
+
+df <- df %>% 
+  inner_join(tibble(clon=sub$clon, # clone id
+             alpha_clon=rnorm(length(sub$clon),mean=0,sd=sub$sigma_clon)), # clone varying intercepts
+             by="clon") %>% 
+  inner_join(tibble(block=unique(df$block), # block id
+             alpha_block=rnorm(length(unique(df$block)),mean=0,sd=sigma_block)), # block varying intercepts
+             by="block") %>% 
+  dplyr::mutate(mu=beta0 + alpha_prov + alpha_block + alpha_clon, # linear predictor
+                ysim=rnorm(length(df$tree),mu,sigma_r)) # trait values
+
+list.sim <- list(df=df,
+             beta0 =beta0,
+             betaX=betaX,
+             sigma_tot=sigma_tot,
+             sigma_r=sigma_r,
+             sigma_K =sigma_K,
+             sigma_prov=sigma_prov,
+             mean_sigma_clon =mean_sigma_clon ,
+             mu_sigma_clon=mu_sigma_clon,
+             Xp=Xp,
+             sigma_block=sigma_block,
+             pi2=(sigma_block*sigma_block)/(sigma_tot*sigma_tot),
+             pi3=(sigma_prov*sigma_prov)/(sigma_tot*sigma_tot),
+             pi4=mean(sigma_clon)*mean(sigma_clon)/(sigma_tot*sigma_tot),
+             pi1=(sigma_r*sigma_r)/(sigma_tot*sigma_tot))
+}
+```
+
+
+```{r SimulateData, message=F}
+# Simulate the data
+list.sim <- SimulData(trait,nb.set.seed)
+
+list.stan <- list(N=length(list.sim$df$tree),
+             y=list.sim$df$ysim,
+             X=list.sim$Xp,
+             nprov = length(unique(list.sim$df$prov)),
+             nclon = length(unique(list.sim$df$clon)),
+             nblock = length(unique(list.sim$df$block)),
+             prov = as.numeric(as.factor(list.sim$df$prov)),
+             which_prov = as.numeric(as.factor(pull(unique(list.sim$df[c("prov","clon")])[,"prov"]))),
+             clon = as.numeric(as.factor(list.sim$df$clon)),
+             bloc = as.numeric(as.factor(list.sim$df$block)),
+             sigma_K = 0.1)
+```
+
+# One simulation
+
+## Compiling and running the model
+
+```{r CompilModel,message=F}
+if(which.model=="model1") {
+  model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+} else if(which.model=="model2"){
+  model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate_NotWorking.stan")  
+}
+```
+
+```{r FitModel}
+fit.model <- sampling(model, data = list.stan, iter = 2500, chains = 4, cores = 4,save_warmup=F) 
+```
+
+## Model outputs
+
+### Comparing true vs estimated
+
+```{r CompareTrueVsEstimatedStandardDeviations, fig.height=12,fig.width=12,echo=T}
+# Comparing the true standard deviations with the estimated ones
+true <- c(list.sim$sigma_tot,
+          list.sim$sigma_r, 
+          list.sim$sigma_block,
+          list.sim$sigma_prov,
+          list.sim$mean_sigma_clon,
+          c(unique(list.sim$df$sigma_clon)))
+draws <- as.matrix(fit.model) 
+draws <- draws[,grepl("^sigma_tot|sigma_r|sigma_prov|sigma_block|^sigma_clon|^mean_sigma", colnames(draws))]
+p <- mcmc_recover_intervals(draws, true, 
+                       prob = prob.in,prob_outer = prob.out,
+                       point_est=point.est) + 
+  theme(axis.text = element_text(size=16))+
+  coord_flip() + 
+  scale_x_discrete(labels=rev(c(parse(text = TeX("$\\sigma_{tot}$")),
+                            parse(text = TeX("$\\sigma_{r}$")),
+                            parse(text = TeX("$\\sigma_{P}$")),
+                            
+                            parse(text = TeX("$\\sigma_{C_{CEN}}$")),
+                            parse(text = TeX("$\\sigma_{C_{CAS}}$")),
+                            parse(text = TeX("$\\sigma_{C_{CAR}}$")),
+                            parse(text = TeX("$\\sigma_{C_{CAD}}$")),
+                            parse(text = TeX("$\\sigma_{C_{BON}}$")),
+                            parse(text = TeX("$\\sigma_{C_{BAY}}$")),
+                            
+                            parse(text = TeX("$\\sigma_{C_{VER}}$")),
+                            parse(text = TeX("$\\sigma_{C_{VAL}}$")),
+                            parse(text = TeX("$\\sigma_{C_{TAM}}$")),
+                            parse(text = TeX("$\\sigma_{C_{STJ}}$")),
+                            
+                            parse(text = TeX("$\\sigma_{C_{ARN}}$")),
+                            
+                            parse(text = TeX("$\\sigma_{C_{SIE}}$")),
+                            parse(text = TeX("$\\sigma_{C_{SEG}}$")),
+                            parse(text = TeX("$\\sigma_{C_{SAL}}$")),
+                            parse(text = TeX("$\\sigma_{C_{SAC}}$")),
+                            parse(text = TeX("$\\sigma_{C_{QUA}}$")),
+                            parse(text = TeX("$\\sigma_{C_{PUE}}$")),
+                            parse(text = TeX("$\\sigma_{C_{PLE}}$")),
+                            parse(text = TeX("$\\sigma_{C_{PIE}}$")),
+                            parse(text = TeX("$\\sigma_{C_{PIA}}$")),
+                            parse(text = TeX("$\\sigma_{C_{PET}}$")),
+                            
+                            parse(text = TeX("$\\sigma_{C_{ARM}}$")),
+                            parse(text = TeX("$\\sigma_{C_{ORI}}$")),
+                            parse(text = TeX("$\\sigma_{C_{OLO}}$")),
+                            parse(text = TeX("$\\sigma_{C_{OLB}}$")),
+                            parse(text = TeX("$\\sigma_{C_{MIM}}$")),
+                            parse(text = TeX("$\\sigma_{C_{LEI}}$")),
+                            parse(text = TeX("$\\sigma_{C_{LAM}}$")),
+                            parse(text = TeX("$\\sigma_{C_{HOU}}$")),
+                            parse(text = TeX("$\\sigma_{C_{CUE}}$")),
+                            parse(text = TeX("$\\sigma_{C_{COM}}$")),
+                            parse(text = TeX("$\\sigma_{C_{COC}}$")),
+                            parse(text = TeX("$\\sigma_{C_{ALT}}$")),
+                            
+                            parse(text = TeX("$\\sigma_{B}$")),
+                            parse(text = TeX("$mean(\\sigma_{C_{p}})$")))))
+
+ggsave(p, file=paste0("figs/Simulations/StandardDeviations_PostDistri_",trait,"_",which.model,".png"),height=12,width=12)
+p
+```
+
+```{r CompareTrueVsEstimatedPi, fig.height=6,fig.width=10,echo=T}
+# Comparing the true relative importance of the random effects and the estimated ones:
+true <- c(list.sim$pi1,list.sim$pi2,list.sim$pi3,list.sim$pi4)
+draws <- as.matrix(fit.model)
+draws <- draws[,grepl("pi", colnames(draws))]
+p <- mcmc_recover_intervals(draws, true,
+                       prob = prob.in,prob_outer = prob.out,
+                       point_est=point.est) + 
+  theme(axis.text = element_text(size=16))+
+  coord_flip() +
+  scale_x_discrete(labels=c(parse(text = TeX("$\\pi_{r}$")),
+                            parse(text = TeX("$\\pi_{B}$")),
+                            parse(text = TeX("$\\pi_{P}$")),
+                            parse(text = TeX("$\\pi_{C}$"))))
+
+ggsave(p, file=paste0("figs/Simulations/Pi_PostDistri_",trait,"_",which.model,".png"),height=6,width=10)
+p
+```
+
+
+```{r CompareTrueVsEstimatedSigmaK, fig.height=4,fig.width=10,echo=F}
+# Comparing the true value of sigma_K and beta_X and the estimated ones:
+true <- c(list.sim$betaX,list.sim$sigma_K)
+draws <- as.matrix(fit.model) %>% as_tibble()
+draws <- draws[,grepl("sigma_K|betaX", colnames(draws))]
+p <- mcmc_recover_intervals(draws, true,
+                       prob = prob.in,prob_outer = prob.out,
+                       point_est=point.est) + 
+  theme(axis.text = element_text(size=16))+ 
+  coord_flip() +
+  scale_x_discrete(labels=c(parse(text = TeX("$\\beta_{X}$")),
+                            parse(text = TeX("$\\sigma_{K}$")))) 
+
+ggsave(p, file=paste0("figs/Simulations/SigmaKBetaX_PostDistri_",trait,"_",which.model,".png"),height=4,width=10)
+p
+```
+
+### Correlations among parameters
+
+```{r CheckCorrelationsSigmaKBetaX,fig.height=5,fig.width=5}
+np <- nuts_params(fit.model)
+mcmc_pairs(as.array(fit.model), 
+           np = np,
+           pars = c("sigma_K","betaX"), 
+           off_diag_args = list(size = 1, alpha = 1/3),
+           np_style = pairs_style_np(div_size=3, div_shape = 19),
+           max_treedepth =10)
+```
+
+
+# 100 Simulations
+
+
+```{r Run100Models, eval=F}
+# # Which model? 
+# if(which.model=="model1") {
+#   model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+#   betaX <- 0.1
+# } else if(which.model=="model2"){
+#   model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate_NotWorking.stan")  
+#   betaX <- 1.2
+# }
+
+nb.set.seed <- sample(1:1000,100,replace=FALSE)
+
+sim <- lapply(nb.set.seed,function(x){
+
+  list.sim <- SimulData(trait=trait,nb.set.seed=x)
+  
+  list.stan <- list(N=length(list.sim$df$tree),
+             y=list.sim$df$ysim,
+             X=list.sim$Xp,
+             nprov = length(unique(list.sim$df$prov)),
+             nclon = length(unique(list.sim$df$clon)),
+             nblock = length(unique(list.sim$df$block)),
+             prov = as.numeric(as.factor(list.sim$df$prov)),
+             which_prov = as.numeric(as.factor(pull(unique(list.sim$df[c("prov","clon")])[,"prov"]))),
+             clon = as.numeric(as.factor(list.sim$df$clon)),
+             bloc = as.numeric(as.factor(list.sim$df$block)),
+             sigma_K = 0.1)
+  
+  fit.model <- sampling(model, 
+                        data = list.stan, 
+                        pars=c("betaX","sigma_K"), 
+                        iter = n_iter, 
+                        chains = n_chains, 
+                        cores = n_chains,
+                        save_warmup = save_warmup,
+                        thin=n_thin) 
+  
+   conf95 <- broom::tidyMCMC(fit.model,pars=(c("betaX","sigma_K")),
+                droppars = NULL, estimate.method = "median", ess = T, rhat = T, conf.int = T,conf.level = 0.95) %>% 
+     dplyr::rename(conf.low.95=conf.low,
+                   conf.high.95=conf.high,
+                   median=estimate)
+   
+   broom::tidyMCMC(fit.model,pars=(c("betaX","sigma_K")),
+                droppars = NULL, estimate.method = "mean", ess = F, rhat = F, conf.int = T,conf.level = 0.80)%>% 
+     dplyr::rename(conf.low.80=conf.low,
+                   conf.high.80=conf.high,
+                   mean=estimate) %>% 
+     inner_join(conf95,by=c("term","std.error")) %>% 
+     dplyr::select(term,mean,median,std.error,conf.low.80,conf.high.80,conf.low.95,conf.high.95, rhat ,  ess)
+  
+})
+sim
+saveRDS(sim,file=paste0("outputs/simulations/100sim_",which.model,"_",trait,".rds"))
+```
+
+
+```{r 100ModelOuputs, eval=T}
+models <- c("model1","model2")
+trait <- c("POR_htoct12", "BDX_htnov13")
+
+tab <-   lapply(trait, function(trait){
+            lapply(models, function(x){
+
+if(x=="model1") {
+  betaX <- 0.1
+} else if(x=="model2"){
+  betaX <- 1.2
+}
+  
+# betaX
+sim <- readRDS(file=paste0("outputs/simulations/100sim_",x,"_",trait,".rds")) %>% 
+  bind_rows() %>% 
+  filter(term=="betaX") %>% 
+  mutate(bias.mean=mean-betaX,
+         bias.median=median-betaX,
+         coverage.conf.80=case_when(
+           betaX > conf.low.80  & betaX < conf.high.80 ~ 1,
+           betaX < conf.low.80 ~ 0,
+           betaX > conf.high.80 ~ 0),
+         coverage.conf.95=case_when(
+           betaX > conf.low.95  & betaX < conf.high.95 ~ 1,
+           betaX < conf.low.95 ~ 0,
+           betaX > conf.high.95 ~ 0))
+
+tib <- tibble(model=x,
+       term="betaX",
+       true.value=betaX,
+       mean.sdt.error=mean(sim$std.error),
+       mean.bias.mean=mean(sim$bias.mean),
+       mean.bias.median=mean(sim$bias.median),
+       coverage.conf.80=sum(sim$coverage.conf.80),
+       coverage.conf.95=sum(sim$coverage.conf.95))
+
+# sigma_k
+sim <- readRDS(file=paste0("outputs/simulations/100sim_",x,"_",trait,".rds")) %>% 
+  bind_rows() %>% 
+  filter(term=="sigma_K") %>% 
+  mutate(bias.mean=mean-sigma_K,
+         bias.median=median-sigma_K,
+         coverage.conf.80=case_when(
+           sigma_K > conf.low.80  & sigma_K < conf.high.80 ~ 1,
+           sigma_K < conf.low.80 ~ 0,
+           sigma_K > conf.high.80 ~ 0),
+         coverage.conf.95=case_when(
+           sigma_K > conf.low.95  & sigma_K < conf.high.95 ~ 1,
+           sigma_K < conf.low.95 ~ 0,
+           sigma_K > conf.high.95 ~ 0))
+
+tib <- tib %>% 
+  bind_rows(tibble(model=x,
+       term="sigma_K",
+       true.value=sigma_K,
+       mean.sdt.error=mean(sim$std.error),
+       mean.bias.mean=mean(sim$bias.mean),
+       mean.bias.median=mean(sim$bias.median),
+       coverage.conf.80=sum(sim$coverage.conf.80),
+       coverage.conf.95=sum(sim$coverage.conf.95)))
+}) %>% bind_rows()
+}) 
+# tab[[1]] %>% kable(digits=3,"latex") # to get the table in latex
+names(tab) <- trait
+tab %>% 
+  bind_rows(.id="trait") %>% 
+  kable(digits=3) %>% 
+  kable_styling(latex_options =c("striped", "hold_position"))
+```
+
+
+The second model (in which the effect of the potential drivers applies on the mean of the within-population genetic variation) has wider and less precise estimates. So we keep the first model (in which the effect of the potential drivers applies on the median of the within-population genetic variation) for the following analyses and only report the outputs of this first model in the paper.
+
+`r knitr::opts_chunk$set(eval = F)`
+
+
