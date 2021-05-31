@@ -64,7 +64,7 @@ library(kableExtra) # CRAN v1.1.0
 library(hierfstat)  # CRAN v0.04-22
 library(matrixcalc) # CRAN v1.0-3
 library(latex2exp)  # CRAN v0.4.0
-options(knitr.table.format = "latex")
+#options(knitr.table.format = "latex")
 ```
 
 In this document, we calculate eight indexs standing for eight potential drivers of the within-population genetic variation:
@@ -1227,6 +1227,8 @@ df %>%
   column_spec(1, bold = T)
 ```
 
+The mean summer heat moisture index across populations is `r df$SHM %>% mean() %>% round(2)` °C/mm. 
+
 ## Extreme minimum temperature
 
 $EMT$: the extreme minimum temperature over the period considered (1901-1950). For intepretation, we are going to use $invEMT$ ($=-EMT$).
@@ -1243,6 +1245,8 @@ df %>%
   kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 ```
+
+The mean extreme minimum temperature across populations is `r df$EMT %>% mean() %>% round(2)` °C. 
 
 # Correlations among the potential drivers
 
