@@ -928,8 +928,8 @@ df[,"Dist1000"] <- unlist(lapply(pop.val1, function(x) length(x$cell[x$dist<1000
 ```
 
 
-```{r VisualizationPC1, fig.height=8,fig.width=16}
-layout(matrix(1:4,2,2))
+```{r VisualizationPC1, echo=F, fig.height=16,fig.width=16}
+layout(matrix(1:8,4,2))
 
 buff20 <- spTransform(buff20,crs(rast.pc1))
 
@@ -991,6 +991,67 @@ plot(rastpop,ext=ext.laea,
 plot(xyprov,add=T)
 plot(buff20,add=T)
 text(4215000,2125000, "PIE and PIA",cex=1.4)
+
+# OLB
+nb=21
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3390000,1980000, "OLB",cex=1.4)
+
+
+# ORI
+nb=19
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3200000,1710000, "ORI",cex=1.4)
+
+# BON
+nb=25
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3300000,1970000, "BON",cex=1.4)
+
+# VAL
+nb=7
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3090000,2070000, "VAL",cex=1.4)
 ```
 
 ### 1.6-km radius
