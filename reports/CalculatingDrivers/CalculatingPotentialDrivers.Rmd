@@ -1248,7 +1248,9 @@ df %>%
 
 The mean extreme minimum temperature across populations is `r df$EMT %>% mean() %>% round(2)` °C. 
 
-# Correlations among the potential drivers
+# Correlations 
+
+Correlations among the potential drivers:
 
 ```{r CorrelationsAllDrivers}
 df %>% dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
@@ -1274,6 +1276,24 @@ df %>%
   kable_styling(latex_options =c("striped", "hold_position"))
 ```
 
+Correlations between the potential drivers and the altitude of the populations:
+
+```{r CorrelationDriversAltitude}
+readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  dplyr::select(prov,altitude_prov) %>% 
+  distinct() %>% 
+  inner_join(df,by="prov") %>% 
+  dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
+                EH.1km.PC1,EH.1km.PC2,SHM,invEMT,altitude_prov) %>% 
+  cor() %>% 
+  upper.triangle() %>% 
+  as.data.frame() %>% 
+  dplyr::select(altitude_prov) %>% 
+  kable(digits=3) %>% 
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F)
+```
 
 ```{r SaveDF}
 saveRDS(df,file="data/DF_Drivers.rds")
