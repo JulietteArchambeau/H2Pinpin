@@ -79,13 +79,13 @@ Sum-up of the traits selected in this study:
       
       - In Cabada (Asturias, Spain): height in November 2012 when the trees were 21 month old.
       
-      - In Pierroton (France):  height in November 2013 when the trees were 25 month old & in November 2018 when the trees were 85 month old.
+      - In Bordeaux (France):  height in November 2013 when the trees were 25 month old & in November 2018 when the trees were 85 month old.
     
   - Phenology:
       
-      - bud burst (=date of brachybalst emergence) in 2014 in Pierroton
+      - bud burst (=date of brachybalst emergence) in 2014 in Bordeaux
       
-      - duration of bud burst in 2014 in Pierroton.
+      - duration of bud burst in 2014 in Bordeaux.
       
   - Functional traits
   
@@ -113,7 +113,7 @@ data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
 data %>% dplyr::select(contains("ht")) %>% summary
 ```
 
-## Pierroton (France) - November 2013 and 2018
+## Bordeaux (France) - November 2013 and 2018
 
 
 ```{r BBhistBordeaux, fig.height=10,fig.width=10,warning=F}
@@ -192,7 +192,7 @@ p <- ggplot(data, aes(x=BDX_htnov13, fill=as.factor(prov))) +
   theme(legend.position = "none")
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2013.png",height=10,width=12)
+ggsave(p,file="figs/ExploratoryAnalyses/HeightBordeaux2013.png",height=10,width=12)
 ```
 
 ```{r BDX2013HeightGP, fig.height=10,fig.width=12,warning=F,message=F}
@@ -221,7 +221,7 @@ p <- ggplot(data, aes(x=BDX_htnov13, fill=as.factor(max.Q))) +
   guides(fill=guide_legend(nrow=2))
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2013.png",height=10,width=12)
+ggsave(p,file="figs/ExploratoryAnalyses/HeightBordeaux2013.png",height=10,width=12)
 ```
 
 
@@ -242,7 +242,7 @@ p <- ggplot(data, aes(x=BDX_htnov13, fill=EMT)) +
         legend.title = element_text(size=12))
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2013_EMTgradient.png",height=height.wrap,width=width.wrap)
+ggsave(p,file="figs/ExploratoryAnalyses/HeightBordeaux2013_EMTgradient.png",height=height.wrap,width=width.wrap)
 ```
 
 
@@ -271,7 +271,7 @@ p <- ggplot(data, aes(x=BDX_htnov18, fill=as.factor(max.Q))) +
         legend.title = element_text(size=14)) + 
   guides(fill=guide_legend(nrow=2))
 p
-ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2018.png",height=10,width=12)
+ggsave(p,file="figs/ExploratoryAnalyses/HeightBordeaux2018.png",height=10,width=12)
 ```
 
 ```{r BDX2018HeightEMT, fig.height=10,fig.width=12,warning=F,message=F}
@@ -291,7 +291,7 @@ p <- ggplot(data, aes(x=BDX_htnov18, fill=EMT)) +
         legend.title = element_text(size=12))
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/HeightPierroton2018_EMTgradient.png",height=height.wrap,width=width.wrap)
+ggsave(p,file="figs/ExploratoryAnalyses/HeightBordeaux2018_EMTgradient.png",height=height.wrap,width=width.wrap)
 ```
 
 
@@ -546,7 +546,7 @@ p <- ggplot(data, aes(x=BDX_s32014, fill=as.factor(max.Q))) +
   guides(fill=guide_legend(nrow=2))
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/BudBurstPierroton2014.png",height=10,width=12)
+ggsave(p,file="figs/ExploratoryAnalyses/BudBurstBordeaux2014.png",height=10,width=12)
 ```
 
 
@@ -567,7 +567,7 @@ p <- ggplot(data, aes(x=BDX_s32014, fill=EMT)) +
         legend.title = element_text(size=12))
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/BudBurstPierroton2014_EMTgradient.png",height=height.wrap,width=width.wrap)
+ggsave(p,file="figs/ExploratoryAnalyses/BudBurstBordeaux2014_EMTgradient.png",height=height.wrap,width=width.wrap)
 ```
 
 
@@ -648,7 +648,7 @@ p <- ggplot(data, aes(x=BDX_dbb2014, fill=as.factor(max.Q))) +
 
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/DurationBudBurstPierroton2014.png",height=10,width=12)
+ggsave(p,file="figs/ExploratoryAnalyses/DurationBudBurstBordeaux2014.png",height=10,width=12)
 ```
 
 
@@ -669,7 +669,7 @@ p <- ggplot(data, aes(x=BDX_dbb2014, fill=EMT)) +
         legend.title = element_text(size=12))
 
 p
-ggsave(p,file="figs/ExploratoryAnalyses/DurationBudBurstPierroton2014_EMTgradient.png",
+ggsave(p,file="figs/ExploratoryAnalyses/DurationBudBurstBordeaux2014_EMTgradient.png",
        height=height.wrap,width=width.wrap)
 ```
 
@@ -847,11 +847,11 @@ ggplot(data, aes(x= POR_htoct12)) +
                                       hjust=0,
                                       gp=gpar(fontsize=fontsize)))),
 
-  # Height Pierroton 2013
+  # Height Bordeaux 2013
 ggplot(data, aes(x= BDX_htnov13)) + 
   geom_histogram(binwidth = 20, fill="#D73027",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Height (Pierroton, 25 months, mm)",y="") +
+  labs(x="Height (Bordeaux, 25 months, mm)",y="") +
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(data$BDX_htnov13,na.rm=T),2)), 
                                       x=0.7,  
@@ -865,11 +865,11 @@ ggplot(data, aes(x= BDX_htnov13)) +
                                       hjust=0,
                                       gp=gpar(fontsize=fontsize)))),
 
-  # Height Pierroton 2018
+  # Height Bordeaux 2018
 ggplot(data, aes(x= BDX_htnov18)) + 
   geom_histogram(binwidth = 20, fill="#F46D43",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Height (Pierroton, 85 months, mm)",y="") +
+  labs(x="Height (Bordeaux, 85 months, mm)",y="") +
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(data$BDX_htnov18,na.rm=T),2)), 
                                       x=0.7,  
@@ -901,11 +901,11 @@ ggplot(data, aes(x= AST_htnov12)) +
                                       hjust=0,
                                       gp=gpar(fontsize=fontsize)))),
 
-  # Mean bud burst date Pierroton
+  # Mean bud burst date Bordeaux
 ggplot(meanBB,aes(x= mean)) + 
   geom_histogram(binwidth = 10,fill="#5AAE61",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Mean bud burst date (Pierroton, over four years, °C-day)",y="") +
+  labs(x="Mean bud burst date (Bordeaux, over four years, °C-day)",y="") +
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(meanBB$mean,na.rm=T),2)), 
                                       x=0.7,  
@@ -919,11 +919,11 @@ ggplot(meanBB,aes(x= mean)) +
                                       hjust=0,
                                       gp=gpar(fontsize=fontsize)))),
 
-  # Mean duration bud burst Pierroton
+  # Mean duration bud burst Bordeaux
 ggplot(meanDBB,aes(x= mean)) + 
   geom_histogram(binwidth = 10,fill="#A6DBA0",alpha=0.7) +  
   theme_bw() + 
-  labs(x="Mean duration of bud burst (Pierroton, over three years, °C-day)",y="") +
+  labs(x="Mean duration of bud burst (Bordeaux, over three years, °C-day)",y="") +
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(meanDBB$mean,na.rm=T),2)), 
                                       x=0.7,  
@@ -983,7 +983,7 @@ ggsave(p,file=paste0("figs/ExploratoryAnalyses/TraitsDistribution.png"),width = 
 # the numbers in the columns "Trees", "Populations" and "Clones" were checked with the model inputs (May 12th)
 tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud burst","Surface Leaf Area","$\\delta^{13}$C"),
        
-       "Common gardens"=c("Fundão",rep("Pierroton",2),"Cabada",rep("Pierroton",2),rep("Fundão",2)),
+       "Common gardens"=c("Fundão",rep("Bordeaux",2),"Cabada",rep("Bordeaux",2),rep("Fundão",2)),
        
        "Dates of measurement" =c("October 2012","November 2013", "November 2018","November 2012", "2013, 2014, 2015, 2017", "2014, 2015 2017", NA,NA),
        
@@ -993,10 +993,10 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
       # Proportion survival Portugal 
       round(table(data$POR_survoct12)[[2]]/(table(data$POR_survoct12)[[1]]+table(data$POR_survoct12)[[2]]),2),
       
-       # Proportion survival Pierroton 2013
+       # Proportion survival Bordeaux 2013
        round(table(data$BDX_surv13)[[2]]/(table(data$BDX_surv13)[[1]]+table(data$BDX_surv13)[[2]]),2),
        
-       # Proportion survival Pierroton 2018
+       # Proportion survival Bordeaux 2018
        round(table(data$BDX_surv18)[[2]]/(table(data$BDX_surv18)[[1]]+table(data$BDX_surv18)[[2]]),2),
       
       # Proportion survival Asturias
@@ -1007,38 +1007,38 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
        "Units"=c(rep("mm",4),"°C-day","°C-day","m$^{2}$/kg","‰"),
        
        "Trees"=c(length(data$tree[!is.na(data$POR_htoct12)]),  # height Fundão (Portugal) 2012
-                 length(data$tree[!is.na(data$BDX_htnov13)]),  # height Pierroton 2013
-                 length(data$tree[!is.na(data$BDX_htnov18)]),  # height Pierroton 2018
+                 length(data$tree[!is.na(data$BDX_htnov13)]),  # height Bordeaux 2013
+                 length(data$tree[!is.na(data$BDX_htnov18)]),  # height Bordeaux 2018
                  length(data$tree[!is.na(data$AST_htnov12)]),  # height Cabada (Asturias) 2012
-                 length(meanBB$tree[!is.na(meanBB$mean)]),     # mean bud burst date Pierroton
-                 length(meanDBB$tree[!is.na(meanDBB$mean)]),   # mean duration bud burst Pierroton
+                 length(meanBB$tree[!is.na(meanBB$mean)]),     # mean bud burst date Bordeaux
+                 length(meanDBB$tree[!is.na(meanDBB$mean)]),   # mean duration bud burst Bordeaux
                  length(data$tree[!is.na(data$POR_SLA)]),      # SLA Fundão 
                  length(data$tree[!is.na(data$d13C)])),        # delta 13 C Fundão 
        
         "Populations" = c(length(unique(data$prov[!is.na(data$POR_htoct12)])), # height Portugal 2012
-                          length(unique(data$prov[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
-                          length(unique(data$prov[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                          length(unique(data$prov[!is.na(data$BDX_htnov13)])), # height Bordeaux 2013
+                          length(unique(data$prov[!is.na(data$BDX_htnov18)])), # height Bordeaux 2018
                           length(unique(data$prov[!is.na(data$AST_htnov12)])), # height Asturias 2012
-                          length(unique(meanBB$prov[!is.na(meanBB$mean)])),    # mean bud burst date Pierroton
-                          length(unique(meanDBB$prov[!is.na(meanDBB$mean)])),  # mean duration bud burst Pierroton
+                          length(unique(meanBB$prov[!is.na(meanBB$mean)])),    # mean bud burst date Bordeaux
+                          length(unique(meanDBB$prov[!is.na(meanDBB$mean)])),  # mean duration bud burst Bordeaux
                           length(unique(data$prov[!is.na(data$POR_SLA)])),     # SLA Fundão 
                           length(unique(data$prov[!is.na(data$d13C)]))),       # delta 13 C Fundão 
                           
         "Clones" = c(length(unique(data$clon[!is.na(data$POR_htoct12)])), # height Portugal 2012
-                     length(unique(data$clon[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
-                     length(unique(data$clon[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                     length(unique(data$clon[!is.na(data$BDX_htnov13)])), # height Bordeaux 2013
+                     length(unique(data$clon[!is.na(data$BDX_htnov18)])), # height Bordeaux 2018
                      length(unique(data$clon[!is.na(data$AST_htnov12)])), # height Asturias 2012
-                     length(unique(meanBB$clon[!is.na(meanBB$mean)])),    # mean bud burst date Pierroton
-                     length(unique(meanDBB$clon[!is.na(meanDBB$mean)])),  # mean duration bud burst Pierroton
+                     length(unique(meanBB$clon[!is.na(meanBB$mean)])),    # mean bud burst date Bordeaux
+                     length(unique(meanDBB$clon[!is.na(meanDBB$mean)])),  # mean duration bud burst Bordeaux
                      length(unique(data$clon[!is.na(data$POR_SLA)])),     # SLA Fundão 
                      length(unique(data$clon[!is.na(data$d13C)]))),       # delta 13 C Fundão   
        
         "Blocks" = c(length(unique(data$block[!is.na(data$POR_htoct12)])), # height Portugal 2012
-                     length(unique(data$block[!is.na(data$BDX_htnov13)])), # height Pierroton 2013
-                     length(unique(data$block[!is.na(data$BDX_htnov18)])), # height Pierroton 2018
+                     length(unique(data$block[!is.na(data$BDX_htnov13)])), # height Bordeaux 2013
+                     length(unique(data$block[!is.na(data$BDX_htnov18)])), # height Bordeaux 2018
                      length(unique(data$block[!is.na(data$AST_htnov12)])), # height Asturias 2012
-                     length(unique(meanBB$block[!is.na(meanBB$mean)])),    # mean bud burst date Pierroton
-                     length(unique(meanDBB$block[!is.na(meanDBB$mean)])),  # mean duration bud burst Pierroton
+                     length(unique(meanBB$block[!is.na(meanBB$mean)])),    # mean bud burst date Bordeaux
+                     length(unique(meanDBB$block[!is.na(meanDBB$mean)])),  # mean duration bud burst Bordeaux
                      length(unique(data$block[!is.na(data$POR_SLA)])),     # SLA Fundão 
                      length(unique(data$block[!is.na(data$d13C)])))        # delta 13 C Fundão   
           ) %>% 
