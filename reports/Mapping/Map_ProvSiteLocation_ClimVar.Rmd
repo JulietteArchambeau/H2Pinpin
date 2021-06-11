@@ -1,0 +1,185 @@
+---
+title: "Mapping - Figure 1"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+```{r setup, include=FALSE}
+# knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=TRUE,cache.lazy = FALSE)
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=F)
+options(width = 300)
+library(knitr)        # CRAN v1.26
+library(reshape2)     # CRAN v1.4.4
+library(dplyr)        # CRAN v1.0.0
+library(tidyverse)    # CRAN v1.3.0
+library(kableExtra)   # CRAN v1.1.0
+library(cowplot)      # CRAN v1.0.0
+library(parallel)
+library(sf)           # CRAN v0.9-4
+library(raster)       # CRAN v3.3-13
+library(spData)       # CRAN v0.3.5
+library(RStoolbox)    # CRAN v0.2.6
+```
+
+
+# Provenance and site coordinates
+
+```{r ProvSiteCoordinates}
+data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
+
+# Provenance coordinates
+# ----------------------
+df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
+
+# Remove the ROD population because it has no genomic data,
+# and the MAD population because it has only one clone (so the genetic variation can't
+# be estimated)
+df <- df[!(df$prov=="ROD"|df$prov=="MAD"),]
+colnames(df) <- c("prov","longitude","latitude")
+
+                      # Create a spatial object of the provenance coordinates 
+xyprov <- SpatialPoints(df[,c("longitude","latitude")], 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+
+# Site coordinates
+# ----------------
+df <- unique(data[,c("site","longitude_site","latitude_site")])
+colnames(df) <- c("site","longitude","latitude")
+
+                      # Create a spatial object of the site coordinates 
+xysite <- SpatialPoints(df[,c("longitude","latitude")], 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+```
+
+# PCA of the 2 climatic variables
+
+$EMT$: Extreme minimum temperature over the period considered (1901-1950) (°C)
+
+$SHM$: Summer heat moisture index (°C/mm)
+
+The CRS of the climatic rasters is **EPSG:3035 (ETRS89, LAEA)** (+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs).
+
+```{r PCA,fig.height=5,fig.width=5}
+ext <- extent(matrix(c(2500000,1200000,4500000,3000000), nrow=2))
+
+var.clim <- c("EMT","SHM")
+
+clim.val <- var.clim %>% mclapply(function(x){
+
+  rast <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",x,".tif")) 
+  rast <- crop(rast,ext)
+  val <- getValues(rast)
+  val <- tibble(cell.num=1:length(val),"{x}" :=val) %>% drop_na()
+  
+  })
+
+clim.val <- clim.val[[1]] %>% 
+  inner_join(clim.val[[2]],by="cell.num")
+
+# Run the PCA with 2 variables: EMT and SHM
+pca <- prcomp(clim.val[2:3], center = T, scale. = T)
+
+##assigns to colors, edit as needed to maximize color contrast, etc.
+a1 <- pca$x[,1]; a2 <- pca$x[,2];
+r <- a1; g <- -a2-a1 ;b <- a2 
+g <- a1; b <- -a2-a1 ;r <- a2 
+
+
+# scale colors and assign color to raster
+rast1 <- rast2 <- rast3 <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif")) %>% crop(ext)
+rast1[clim.val$cell.num] <- (r-min(r))/(max(r)-min(r))*255
+rast2[clim.val$cell.num] <- (g-min(g))/(max(g)-min(g))*255
+rast3[clim.val$cell.num] <- (b-min(b))/(max(b)-min(b))*255
+
+
+outRast <- stack(rast1, rast2, rast3)
+plotRGB(outRast, r = 1, g = 2, b = 3,bgalpha=0)
+```
+
+
+```{r SiteProvCoordinatesLAEA}
+# Reproject in ETRS89 - LAEA 
+xyprov <- spTransform(xyprov,crs(rast1))
+xysite <- spTransform(xysite,crs(rast1))
+
+xyprovdf <- xyprov@coords %>% as_tibble()
+xysitedf <- xysite@coords %>% as_tibble() %>% mutate(Site=c("Asturias","Bordeaux","Fundão"))
+```
+
+
+# Mapping
+
+```{r MapPCA,fig.height=6,fig.width=6}
+p <- ggRGB(outRast, r=1,g=2, b=3) + 
+  geom_point(data=xyprovdf,aes(x=longitude,y=latitude),size=2) +
+  geom_point(data=xysitedf,aes(x=longitude,y=latitude),col="red",size=3,shape=17) +
+  geom_text(data=xysitedf,aes(x=longitude,y=latitude,label=Site),hjust=0, vjust=2, col="red",size=3) +
+  theme_map()
+#ggsave(p,file="maps/maprgb.svg") # then I used Inkscape to do the final map
+p
+```
+
+
+```{r PlottingPCA,eval=F}
+nvs <- dim(pca$rotation)[1]
+vec <-  row.names(pca$rotation)
+lv <- length(vec)
+vind <- rownames(pca$rotation) %in% vec
+scal <- 0.5
+xrng <- range(pca$x[, 1], pca$rotation[, 1]/scal) *1.1
+yrng <- range(pca$x[, 2], pca$rotation[, 2]/scal) * 1.1
+
+png("maps/pca.png", width = 500, height = 500)
+plot((pca$x[, 1:2]), xlim = xrng, ylim = yrng, pch = ".", cex = 4, col = rgb(scalR , scalG, scalB, max = 255), asp = 1)
+points(pca$rotation[!vind, 1:2]/scal, pch = "+")
+arrows(rep(0, lv), rep(0, lv), pca$rotation[vec,1]/scal, pca$rotation[vec, 2]/scal, length = 0.0625,lwd=5)
+jit <- 0.6
+text(pca$rotation[vec, 1]/scal + jit * sign(pca$rotation[vec, 1]), 
+     pca$rotation[vec, 2]/scal + jit * sign(pca$rotation[vec, 2]), 
+     labels = vec,cex=3)
+dev.off() 
+```
+
+
