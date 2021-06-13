@@ -87,7 +87,7 @@ conf.level <- 0.95
 ```
 
 
-In this document, we aim to estimate the relationship between potential drivers (namely, two admixture scores, two indexes of environmental heterogeneity and two indexes of climatic harshness) and the within-population genetic variation. 
+In this document, we aim to estimate the relationship between potential drivers (namely, two admixture scores, four indexes of environmental heterogeneity and two indexes of climatic harshness) and the within-population genetic variation. 
 
 For each potential driver $X_{p}$, we model the normally-distributed traits $y_{bpcr}$ with the following statistical model:
 
@@ -831,13 +831,13 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),heigh
 ## $\mathcal{R}^{2}$
 
 
-```{r}
+```{r RsquaredPosteriors}
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
 param <- "R_squared"
 
 df <- traits %>% 
-  mclapply(ExtractRsquared) %>% 
+  mclapply(ExtractParam) %>% 
   bind_rows() %>%
   mutate(trait.class=case_when(Traits=="POR_htoct12"~"Height",
                        Traits=="BDX_htnov13"~"Height",
@@ -861,7 +861,6 @@ df$Traits <- factor(df$Traits,levels=c(traits))
 df$Xp <- as.factor(df$Xp)
 df$Xp <- factor(df$Xp,levels=rev(c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")))
 
-# Option 4
 p <- df %>% 
   ggplot(aes(x = trait.names, y = estimate,ymin = conf.low, ymax = conf.high,color=Xp)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,alpha=0.6) +
@@ -884,7 +883,7 @@ p <- df %>%
       strip.text.x = element_text(size = 14),
       panel.grid.minor.x=element_blank(),
       panel.grid.major.x=element_blank()) +
-    guides(color=guide_legend(ncol=2,reverse=T))
+    guides(color=guide_legend(ncol=2))
     
 p
 
