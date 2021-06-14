@@ -70,6 +70,8 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 ```
 
+`r knitr::opts_chunk$set(eval = F)`
+
 ```{r OptionDocs}
 # Options for sampling
 n_chains <- 4
@@ -976,4 +978,110 @@ df <- mclapply(traits, function(x){
 df %>% kable(digits=3,"latex")
 ```
 
-`r knitr::opts_chunk$set(eval = F)`
+
+# Climatic transfer distances
+
+```{r FunctionDownloadDataCTD}
+DownloadDataCTD <- function(trait){
+
+if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
+    CenterResponseVariable <- TRUE
+    LogResponseVariable <- FALSE
+    
+  }  else if(trait=="POR_SLA"){
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- TRUE
+  } else {
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- FALSE
+  }
+  
+  drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
+    dplyr::select(prov,contains("_EMT"),contains("_SHM")) %>% 
+    dplyr::mutate(dplyr::across(-prov,scale))
+  
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::mutate(trait = rowMeans(dplyr::select(.,contains("BDX")),na.rm=T)) %>%
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov") 
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov")
+  
+  }
+  
+  # Depending on the site where the traits were measured, we do not use the same CTD
+  if(trait %in% c("MeanBB","MeanDBB","BDX_htnov18","BDX_htnov13")) CTD <- c("CTD_bordeaux_EMT","CTD_bordeaux_SHM")
+  if(trait %in% c("POR_SLA","d13C","POR_htoct12")) CTD <- c("CTD_portugal_EMT","CTD_portugal_SHM")
+  if(trait == "AST_htnov12") CTD <- c("CTD_asturias_EMT","CTD_asturias_SHM")
+  
+  list.stan <- lapply(CTD, function(x)    {
+    list(N=length(df$tree),
+         y=df$trait,
+         X=as.numeric(pull(unique(df[,c(x,"prov")]) %>% dplyr::select(contains(x)))),
+         nprov = length(unique(df$prov)),
+         nclon = length(unique(df$clon)),
+         nblock = length(unique(df$block)),
+         prov = as.numeric(as.factor(df$prov)),
+         which_prov = as.numeric(as.factor(pull(unique(df[c("prov","clon")])[,"prov"]))),
+         clon = as.numeric(as.factor(df$clon)),
+         bloc = as.numeric(as.factor(df$block)))})
+  
+  names(list.stan) <- CTD
+  
+  return(list.stan)
+}
+```
+
+```{r RunningModelsCTD}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+CTDbetaX <- lapply(traits, function(trait) {
+  
+  list.stan <- DownloadDataCTD(trait)
+  
+  
+  output <- lapply(names(list.stan), function(x){
+    
+    mod <- sampling(model, 
+                  data = list.stan[[x]], 
+                  pars=c("betaX"),
+                  iter = n_iter, 
+                  chains = n_chains, 
+                  cores = n_chains,
+                  save_warmup = save_warmup,
+                  thin=n_thin)
+  
+    broom::tidyMCMC(mod,pars=(c("betaX")),
+                  droppars = NULL, estimate.method = "median", ess = T, rhat = T, conf.int = T,conf.level = 0.95) %>% 
+      dplyr::mutate(driver=x)
+    
+  }) %>% bind_rows
+  
+  
+  })
+
+names(CTDbetaX) <- traits
+CTDbetaX %>% bind_rows(.id="Trait")
+
+saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
+```
+
+
