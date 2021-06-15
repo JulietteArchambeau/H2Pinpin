@@ -309,7 +309,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_BetaX.png"),height=8,wid
 })
 ```
 
-### Main figure of the paper (Figure 2)
+### Main figure of the paper (Figure 2) (5 drivers)
 
 
 ```{r}
@@ -359,7 +359,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
-                                "Surface Leaf Area",
+                                "Specific Leaf Area",
                                 d13c)), # 
                      values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
   scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
@@ -368,7 +368,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
-                                "Surface Leaf Area",
+                                "Specific Leaf Area",
                                 d13c)),
                      values = c(15, 15,17, 17,16,16,16,16)) +
   theme_bw() +
@@ -387,6 +387,82 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
 ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig.png",height=8,width=10)
 ```
 
+
+### Figure in Supp Info (5 drivers, all traits)
+
+
+```{r AllTraits}
+traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
+param <- "betaX"
+
+df.betaX <- mclapply(traits,ExtractParam)
+
+df.betaX <- df.betaX %>% 
+  bind_rows() %>%
+  mutate(Hyp=case_when(Xp=="A"~"Admixture",
+                       Xp=="D"~"Admixture",
+                       Xp=="EH1[20km]"~"Environmental heterogeneity",
+                       Xp=="EH2[20km]"~"Environmental heterogeneity",
+                       Xp=="EH1[1.6km]"~"Environmental heterogeneity",
+                       Xp=="EH2[1.6km]"~"Environmental heterogeneity",
+                       Xp=="SHM"~"Climate harshness",
+                       Xp=="invEMT"~"Climate harshness"),
+         TraitType=case_when(Traits=="POR_htoct12"~"Morphological",
+                             Traits=="BDX_htnov13"~"Morphological",
+                             Traits=="AST_htnov12"~"Morphological",
+                             Traits=="BDX_htnov18"~"Morphological",
+                             Traits=="MeanBB"~"Phenological",
+                             Traits=="MeanDBB"~"Phenological",
+                             Traits=="POR_SLA"~"Functional",
+                             Traits=="d13C"~"Functional"))
+
+
+df.betaX$Traits <- as.factor(df.betaX$Traits)
+levels(df.betaX$Traits)
+df.betaX$Traits <- factor(df.betaX$Traits,levels=rev(c(traits)))
+df.betaX$Xp <- as.factor(df.betaX$Xp)
+df.betaX$Xp <- factor(df.betaX$Xp,levels=rev(levels(df.betaX$Xp)))
+
+d13c <- parse(text = TeX("$\\delta^{13}C$"))
+
+p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Fundão, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), # 
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Fundão, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.27, .13),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=2))
+p
+ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX.png",height=8,width=12)
+```
 
 ### Other visualizations I tried
 
@@ -416,7 +492,7 @@ p <- df.betaX %>%
                                 "Height (Bordeaux, 85 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
-                                "Surface Leaf Area",
+                                "Specific Leaf Area",
                                 parse(text = TeX("$\\delta^{13}C$")))
                      )) +
   theme_bw() +
@@ -453,7 +529,7 @@ p <- df.betaX %>%
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
-                                "Surface Leaf Area",
+                                "Specific Leaf Area",
                                 parse(text = TeX("$\\delta^{13}C$")))
                      )) +
   theme_bw() +
@@ -500,7 +576,7 @@ df.betaX  <- df.betaX %>%
 #                                 "Height (Bordeaux, 25 months)",
 #                                 "Height (Bordeaux, 85 months)",
 #                                 "Height (Asturias, 21 months)",
-#                                 "Surface Leaf Area",
+#                                 "Specific Leaf Area",
 #                                 "Mean bud burst date",
 #                                 "Mean duration of bud burst",
 #                                 parse(text = TeX("$\\delta^{13}C$")))
@@ -539,7 +615,7 @@ p <- df.betaX %>%
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
-                                "Surface Leaf Area",
+                                "Specific Leaf Area",
                                 parse(text = TeX("$\\delta^{13}C$")))
                      )) +
   theme_bw() +
@@ -580,7 +656,7 @@ p <- df.betaX %>%
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
-                                "Surface Leaf Area",
+                                "Specific Leaf Area",
                                 parse(text = TeX("$\\delta^{13}C$")))
                      )) +
   theme_bw() +
