@@ -1,5 +1,5 @@
 ---
-title: "Associating within-population genetic variation with potential underlying drivers"
+title: "Bayesian analysis to associate within-population genetic variation with potential underlying drivers"
 subtitle: "Based on real data"
 author: "Juliette Archambeau"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
@@ -47,7 +47,6 @@ pre[class] {
 ```
 
 ```{r setup, include=FALSE}
-# knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=TRUE,cache.lazy = FALSE)
 knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=F)
 options(width = 300)
 library(knitr)        # CRAN v1.26
@@ -88,6 +87,7 @@ point.est="median"
 conf.level <- 0.95
 ```
 
+# Mathematical model
 
 In this document, we aim to estimate the relationship between potential drivers (namely, two admixture scores, four indexes of environmental heterogeneity and two indexes of climatic harshness) and the within-population genetic variation. 
 
@@ -126,13 +126,37 @@ model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_On
 ```
 
 
+# Functions used
+
 ```{r FunctionDownloadFormatData,eval=F}
 DownloadData <- function(trait){
 
+#### Trait transformations
+    # Phenology-realted traits and delta13C are centered to help convergence
+if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
+    CenterResponseVariable <- TRUE
+    LogResponseVariable <- FALSE
+    
+    # SLA is not centered and we used its logarithm as response variable
+  }  else if(trait=="POR_SLA"){ 
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- TRUE
+    
+    # Height is not transformed
+  } else { 
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- FALSE
+  }
+
+  
+#### Downloading the potential drivers
   drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
     dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
     dplyr::mutate(across(-prov,scale))
+
   
+  
+#### Merging with the phenotypic data
   if(trait=="MeanBB"|trait=="MeanDBB"){
       
   df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
@@ -166,6 +190,7 @@ DownloadData <- function(trait){
   
   list.trait <- list(df=df)
 
+#### Create the stan lists:
   list.stan <- lapply(colnames(drivers %>% dplyr::select(-prov)), function(x)    {
     list(N=length(df$tree),
          y=df$trait,
@@ -186,7 +211,7 @@ DownloadData <- function(trait){
 
 ExtractParam <- function(x)  {
   readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
-  mclapply(function(x) broom::tidyMCMC(x,pars=(param),
+  mclapply(function(x) broom::tidyMCMC(x,pars=param,
                 droppars = NULL, 
                 estimate.method = point.est, 
                 ess = F, 
@@ -199,35 +224,14 @@ ExtractParam <- function(x)  {
 }
 ```
 
+# Running and saving the models
 
-
-```{r WhichTrait}
-# For these traits, the response variable is not centered
-CenterResponseVariable <- FALSE
-LogResponseVariable <- FALSE
-trait <- "POR_htoct12" # Height in  Fundão (Portugal) - October 2012
-trait <- "BDX_htnov13" # Bordeaux (France) - November 2013
-trait <- "BDX_htnov18" # Bordeaux (France) - November 2018 
-trait <- "AST_htnov12" # Cabada (Asturias, Spain) - November 2012
-
-# For this trait, the response variable is not centered and we used its logarithm as response variable
-CenterResponseVariable <- FALSE
-LogResponseVariable <- TRUE
-trait <- "POR_SLA"
-# trait <- "BDX_s32014"
-# trait <- "BDX_dbb2014"
-
-# For this trait, I centered the response variable to help convergence
-CenterResponseVariable <- TRUE
-LogResponseVariable <- FALSE
-trait <- "d13C"        # Delta13C
-trait <- "MeanBB"      # mean bud burst data over four years (2013, 2014, 2015, 2017)
-trait <- "MeanDBB"     # mean duration of bud burst over three years (2014, 2015, 2017)
-```
-
-For each trait, we ran eight models, one for each potential drivers:
+For each of the eight trait, we ran eight models, one for each potential drivers:
 
 ```{r RunModel,eval=F}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+for(trait in traits){
 list.trait <- DownloadData(trait)
 
 list.models <- list()
@@ -238,6 +242,7 @@ for(i in names(list.trait)[-1]){
                                data = list.trait[[i]], 
                                pars=c("beta0","betaX",
                                       "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
+                                      "h2_prov",
                                       "sigma_tot","sigma_block","sigma_prov",
                                       "mean_sigma_clon","sigma_clon","sigma_K",
                                       #"alpha_clon","alpha_prov",#"alpha_block",
@@ -251,6 +256,8 @@ for(i in names(list.trait)[-1]){
 }
 
 saveRDS(list.models,file=paste0("outputs/models/",trait,".rds"))
+
+}
 ```
 
 We use the `loo` package to compare the models based on the (ELPD)[http://mc-stan.org/loo/reference/loo-glossary.html].
@@ -729,6 +736,80 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon.png"),height=6
 
 ```
 
+## Heritabilities
+
+We calculated population-specific heritabilities, such as:
+
+$$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
+
+```{r H2Figures}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
+
+provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  arrange(by=tree) %>% 
+  distinct(prov) %>% 
+  pull()
+
+mclapply(traits,function(x){
+if(x=="MeanBB"){
+    legend.position <- c(0.85,0.86)} else {
+    legend.position <- c(.15, .86)}
+  
+p <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("h2_prov"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prov=rep(provs,8)) %>% 
+  ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("Populations") +
+  ylab(TeX("$\\H^{2}_{p}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = legend.position,
+        legend.background = element_rect(colour = "grey"),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=4))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_h2prov.png"),height=6,width=22)
+  
+})
+
+```
+
+```{r H2pheno}
+# For the discussion, I calculated the heritability values of the phenology-related traits:
+h2pheno <- mclapply(c("MeanBB","MeanDBB"),function(x){
+  tab <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("h2_prov"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x)
+  
+  mean(tab$estimate)
+  })
+```
+
 
 ## Variance partitioning
 
@@ -1159,5 +1240,3 @@ CTDbetaX %>% bind_rows(.id="Trait")
 
 saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 ```
-
-
