@@ -89,6 +89,7 @@ generated quantities {
   real<lower=0> sigma2_prov;
   real<lower=0> sigma2_block;
   vector[nprov] sigma2_clon;
+  vector[nprov] h2_prov;
 
   // Posterior predictive check
   vector[N] y_rep;
@@ -99,6 +100,7 @@ generated quantities {
   sigma2_r = square(sigma_r);
   sigma2_prov = square(sigma_prov);
   sigma2_clon = square(sigma_clon);
+  h2_prov = sigma2_clon/sigma2_r;
   sigma2_block = square(sigma_block);
   for(i in 1:N)  {
     y_rep[i] = normal_rng(mu[i], sigma_r);
