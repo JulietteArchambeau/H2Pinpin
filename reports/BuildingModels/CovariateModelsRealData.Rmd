@@ -1240,3 +1240,59 @@ CTDbetaX %>% bind_rows(.id="Trait")
 
 saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 ```
+
+
+```{r FigureCTD}
+CTDbetaX <- readRDS(file=paste0("outputs/models/CTDbetaX.rds"))
+
+traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+CTDbetaX <- 
+  CTDbetaX %>% 
+  bind_rows(.id="Traits") %>%
+  mutate(driver=paste0("CMT(",str_sub(driver,-3),")"))
+
+CTDbetaX $Traits <- as.factor(CTDbetaX $Traits)
+CTDbetaX $Traits <- factor(CTDbetaX $Traits,levels=rev(c(traits)))
+
+d13c <- parse(text = TeX("$\\delta^{13}C$"))
+
+p <- CTDbetaX  %>%   ggplot(aes(x = driver, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
+  #facet_grid(.~Hyp,scales="free", space = "free") + 
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Fundão, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), # 
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Fundão, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(0.83,0.84),#c(.37, .16),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
+p
+
+ggsave(p,file="figs/PosteriorDistributions/CTD.png",height=9,width=9)
+```
+
