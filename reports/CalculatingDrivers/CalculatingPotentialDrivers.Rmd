@@ -1339,12 +1339,19 @@ Create the columns with the climatic transfer distances:
 
 ```{r CreateColumnsCTD}
 df <- df %>% 
-  dplyr::mutate(CTD_asturias_EMT=(invEMT+df.site[df.site$site=="asturias","EMT_site"] %>% pull()) %>% abs(),
+  dplyr::mutate(CTD_asturias_EMT=(EMT-df.site[df.site$site=="asturias","EMT_site"] %>% pull()) %>% abs(),
                 CTD_asturias_SHM=(SHM-df.site[df.site$site=="asturias","SHM_site"] %>% pull()) %>% abs(),
-                CTD_bordeaux_EMT=(invEMT+df.site[df.site$site=="bordeaux","EMT_site"] %>% pull()) %>% abs(),
+                CTD_bordeaux_EMT=(EMT-df.site[df.site$site=="bordeaux","EMT_site"] %>% pull()) %>% abs(),
                 CTD_bordeaux_SHM=(SHM-df.site[df.site$site=="bordeaux","SHM_site"] %>% pull()) %>% abs(),
-                CTD_portugal_EMT=(invEMT+df.site[df.site$site=="portugal","EMT_site"] %>% pull()) %>% abs(),
+                CTD_portugal_EMT=(EMT-df.site[df.site$site=="portugal","EMT_site"] %>% pull()) %>% abs(),
                 CTD_portugal_SHM=(SHM-df.site[df.site$site=="portugal","SHM_site"] %>% pull()) %>% abs())
+
+df %>% 
+  dplyr::select(prov,contains("CTD")) %>% 
+  arrange(by=CTD_asturias_EMT) %>% 
+  kable(digits=2) %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
 
 df %>% 
   dplyr::select(contains("EMT"),contains("SHM"),-EMT) %>% 
