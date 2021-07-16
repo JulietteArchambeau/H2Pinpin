@@ -1,0 +1,306 @@
+---
+title: "Narrow-sense heritability in progeny tests"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6,fig.height = 6,cache=F)
+options(width = 300)
+library(knitr)        # CRAN v1.26
+library(reshape2)     # CRAN v1.4.4
+library(dplyr)        # CRAN v1.0.0
+library(tidyverse)    # CRAN v1.3.0
+library(kableExtra)   # CRAN v1.1.0
+library(rstan)        # CRAN v2.19.2
+library(broom)        # CRAN v0.5.2
+library(loo)          # CRAN v2.2.0
+library(latex2exp)    # CRAN v0.4.0
+library(parallel)
+library(tidytidbits)  # CRAN v0.2.3
+library(tidybayes)    # CRAN v2.0.1
+library(bayesplot)    # CRAN v1.7.1
+library(ggplot2)
+library(cowplot)      # CRAN v1.0.0
+library(readxl)
+theme_set(theme_bw(base_size = 20))
+color_scheme_set("green")
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+```
+
+```{r OptionDocs,echo=F}
+# Options for sampling
+n_chains <- 4
+n_iter <- 2500
+n_warm <- 1250
+n_thin <- 1
+save_warmup = FALSE 
+
+theme_set(theme_bw(base_size = 20))
+
+# option for the MCMC intervals
+point.est="median"
+
+conf.level <- 0.95
+```
+
+# Load the progeny test data
+
+```{r LoadData, warning=F,message=F}
+# Load the progeny test data
+data <- read_excel("data/ProgenyTests/F26SNP_d130809_20120515.xls", sheet = 2) %>% 
+  drop_na(Prov_code) # we remove the four rows at the end of the file that have NAs for id, prov id, site...
+
+# Provenance names in the progeny tests:
+# prov.progeny <- unique(data$Prov_code) %>% 
+#   str_to_upper() %>% 
+#   str_sub(1,3) # 30 provenances
+
+# Load CLONAPIN data
+clonapin <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
+
+# Provenance names in CLONAPIN
+prov.clonapin <- unique(clonapin$prov) %>% setdiff("MAD") # 33 provenances
+# prov.progeny[prov.progeny %in% prov.clonapin] # 20 provenances in common
+# prov.progeny[!(prov.progeny %in% prov.clonapin)] # 10 provenances that have no match
+
+# But this method to do the name matching is not ok for some provenances such as SanL,
+# which is SAL with the CLONAPIN code
+
+# Load the file with the matching of code between CLONAPIN (column "CODE") and the progeny tests (column "CODE_FIELD")
+name.clonapin.progeny <- read_csv(file="data/ClonapinData/coordinates_provenances.csv") %>% 
+  filter(CODE %in% prov.clonapin) # keep only the 33 provenances of CLONAPIN used in the study
+
+unique(data$Prov_code)[unique(data$Prov_code) %in% name.clonapin.progeny$CODE_FIELD] # 23 provenances in common
+
+# We keep only these 23 provenances
+data <- name.clonapin.progeny %>% 
+  dplyr::select(CODE,CODE_FIELD) %>% 
+  dplyr::rename(Prov_code=CODE_FIELD, Prov_code_clonapin=CODE) %>%  # Prov_code_clonapin is the code names used in CLONAPIN, Prov_code that used in the progeny tests
+  right_join(data,by = "Prov_code") %>% 
+  drop_na(Prov_code_clonapin)
+```
+
+Dataset of `r dim(data)[1]` observations.
+
+# Which trait
+
+We start with **Height measured the 17/12/2007**.
+
+```{r WhichTrait,message=F}
+trait <- "HT07"
+if (trait=="HT07"){
+ x.label.histogram= "Height measured in the progeny test of Asturias (17/12/2007)"
+}
+
+# remove NAs for the trait of interest
+subdata <- data %>% 
+  drop_na(all_of(trait)) %>% 
+  mutate(Family.id=paste0(Prov_code_clonapin,"_",Fam)) %>% 
+  dplyr::select("Prov_code_clonapin","Prov_code","ID","Fam","Family.id","Block",trait) %>% 
+  rename(Trait=trait)
+```
+
+```{r HistogramWithZero}
+ggplot(subdata, aes(x=Trait)) + 
+  geom_histogram(binwidth = 10, fill="seagreen3") +  
+  theme_bw() + 
+  labs(x=x.label.histogram,y="")
+```
+
+We have to remove the zeros because they may represent dead individuals.
+
+```{r RemovingZeros}
+# removing zeros
+subdata <- subdata %>% filter(!(Trait==0))
+```
+
+We have now `r dim(subdata)[[1]]` observations in in the dataset. Let's plot it again:
+
+```{r HistogramWithoutZeros}
+ggplot(subdata, aes(x=Trait)) + 
+  geom_histogram(binwidth = 10, fill="seagreen3") +  
+  theme_bw() + 
+  labs(x=x.label.histogram,y="")
+```
+
+```{r DesignDataset,message=F}
+# Number of family per provenance
+counts <- subdata %>% 
+  dplyr::select(Prov_code_clonapin,Fam) %>% 
+  distinct() %>% 
+  group_by(Prov_code_clonapin) %>% 
+  dplyr::summarise(count.families=n())
+
+# Mean and variance for height in each provenance (merged with the nb of family per prov)
+meta.subdata <- subdata %>% 
+  dplyr::select(Prov_code_clonapin,Fam,Trait) %>% 
+  group_by(Prov_code_clonapin) %>% 
+  summarise(mean=mean(Trait),var=var(Trait)) %>% 
+  inner_join(counts,by = "Prov_code_clonapin") 
+
+meta.subdata %>% #print(n=33) %>% 
+  kable(digits=2,escape = FALSE) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>% 
+  column_spec(1, bold = T)
+```
+
+Correlation between the number of family per provenance and the within-population variance of the trait: `r cor(meta.subdata$var,meta.subdata$count.families) %>%  round(3)`.
+
+Correlation between the number of family per provenance and the within-population mean of the trait: `r cor(meta.subdata$mean,meta.subdata$count.families) %>% round(3)`.
+
+Correlation between the within-population mean and variance of the trait: `r cor(meta.subdata$var,meta.subdata$mean) %>%  round(3)`.
+
+
+# Option with covariates
+
+```{r ModelCompilation,eval=F}
+model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+```
+
+```{r StanLists, eval=F}
+#### Downloading and merging the dataset with the potential drivers
+df <- readRDS(file="data/DF_Drivers.rds") %>% 
+  dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+  dplyr::mutate(across(-prov,scale)) %>% 
+  dplyr::rename(Prov_code_clonapin=prov) %>% 
+  right_join(subdata,by="Prov_code_clonapin")
+
+list.trait <- list(df=df)
+
+#### Create the stan lists (one for each driver):
+list.stan <- lapply(colnames(df)[2:9], function(x)    {
+    list(N=dim(df)[1],
+         y=df$Trait,
+         X=df[,c(x,"Prov_code_clonapin")] %>% distinct() %>% pull(x) %>% as.numeric(),
+         nprov = length(unique(df$Prov_code_clonapin)),
+         nclon = length(unique(df$Family.id)),
+         nblock = length(unique(df$Block)),
+         prov = as.numeric(as.factor(df$Prov_code_clonapin)),
+         which_prov = as.numeric(as.factor(pull(unique(df[c("Prov_code_clonapin","Family.id")])[,"Prov_code_clonapin"]))),
+         clon = as.numeric(as.factor(df$Family.id)),
+         bloc = as.numeric(as.factor(df$Block)))})
+  
+names(list.stan) <- colnames(df)[2:9]
+```
+
+```{r RunModels,eval=F}
+list.models <- list()
+
+for(i in names(list.stan)){
+  
+  list.models[[i]] <- sampling(model, 
+                               data = list.stan[[i]], 
+                               pars=c("beta0","betaX",
+                                      "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
+                                      "h2_prov",
+                                      "sigma_tot","sigma_block","sigma_prov",
+                                      "mean_sigma_clon","sigma_clon","sigma_K",
+                                      #"alpha_clon","alpha_prov",#"alpha_block",
+                                      # "y_rep" not included not to have a too heavy file
+                                      "R_squared","log_lik"),
+                               iter = n_iter, 
+                               chains = n_chains, 
+                               cores = n_chains,
+                               save_warmup = save_warmup,
+                               thin=n_thin)
+}
+
+saveRDS(list.models,file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds"))
+```
+
+
+```{r FigureBetaX, fig.height=7,fig.width=11}
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
+
+df <-readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %>%  
+  mclapply(function(x) broom::tidyMCMC(x,pars=("betaX"),
+              droppars = NULL, 
+              estimate.method = point.est, 
+              ess = F, 
+              rhat = F, 
+              conf.int = T,
+              conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Xp=drivers) %>% 
+  mutate(Hyp=case_when(Xp=="A"~"Admixture",
+                       Xp=="D"~"Admixture",
+                       Xp=="EH1[20km]"~"Environmental heterogeneity",
+                       Xp=="EH2[20km]"~"Environmental heterogeneity",
+                       Xp=="EH1[1.6km]"~"Environmental heterogeneity",
+                       Xp=="EH2[1.6km]"~"Environmental heterogeneity",
+                       Xp=="SHM"~"Climate harshness",
+                       Xp=="invEMT"~"Climate harshness"))
+  
+
+p <- df %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,colour=drivers)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=3,alpha=0.6,size=5,show.legend = c(size = TRUE)) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+    scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" ,
+                              "#E08214" ,"#FDB863" )) +
+  theme_bw() +
+  
+  labs(color = "Potential drivers") +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.386, .13),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=2))
+
+p
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_BetaX_ProgenyTestAsturias.png"),height=7,width=11)
+```
+
