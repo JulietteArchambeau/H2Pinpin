@@ -57,6 +57,7 @@ library(kableExtra)   # CRAN v1.1.0
 library(cowplot)      # CRAN v1.0.0
 library(parallel)
 library(sf)           # CRAN v0.9-4
+library(readxl)
 library(raster)       # CRAN v3.3-13
 library(spData)       # CRAN v0.3.5
 library(RStoolbox)    # CRAN v0.2.6
@@ -67,10 +68,15 @@ library(rnaturalearth)
 # Provenance and site coordinates
 
 ```{r ProvSiteCoordinates}
+# Load CLONAPIN phenotypic data
 data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
 
 # Provenance coordinates
 # ----------------------
+
+# >> CLONAPIN provenances (33 provenances)
+# -----------------------------------------
+
 df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
 
 # Remove the ROD population because it has no genomic data,
@@ -79,7 +85,7 @@ df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
 df <- df[!(df$prov=="ROD"|df$prov=="MAD"),]
 colnames(df) <- c("prov","longitude","latitude")
 
-                      # Create a spatial object of the provenance coordinates 
+# Create a spatial object of the provenance coordinates 
 xyprov <- SpatialPoints(df[,c("longitude","latitude")], 
                         proj4string=CRS("+proj=longlat +datum=WGS84"))
 
@@ -90,12 +96,55 @@ xyprov <- spTransform(xyprov,crs(raster(paste0("data/Climate/Raw/FromMaurizio/An
 xyprovdf <- xyprov@coords %>% as_tibble()
 
 
+# >> 23 provenances in common with the progeny test in Asturias
+# -------------------------------------------------------------
+# Load the progeny test data of Asturias
+prog.test.data <- read_excel("data/ProgenyTests/F26SNP_d130809_20120515.xls", sheet = 2) %>% drop_na(Prov_code)
+
+# Load the file with the matching of code between CLONAPIN (column "CODE") and the progeny tests (column "CODE_FIELD")
+prov.info <- read_csv(file="data/ClonapinData/coordinates_provenances.csv") %>% 
+  filter(CODE %in% unique(df$prov)) %>%  # keep only the 33 provenances of CLONAPIN used in the study
+  filter(CODE_FIELD %in% unique(prog.test.data$Prov_code)) # keep only the provenances of the progeny tests
+
+# Keep only the 23 provenances in common
+df.common <- df[df$prov %in% prov.info$CODE,]
+
+# Create a spatial object of the provenance coordinates 
+xyprov.common <- SpatialPoints(df.common[,c("longitude","latitude")], 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+# Reproject in ETRS89 - LAEA 
+xyprov.common <- spTransform(xyprov.common,crs(raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))))
+
+# for mapping
+xyprovdf.common <- xyprov.common@coords %>% as_tibble()
+
+# >> Provenances in CLONAPIN but not in the progeny test in Asturias
+# ------------------------------------------------------------------
+
+# Keep only the 10 provenances that are in CLONAPIN but not in the progeny test
+df.diff <- df[!(df$prov %in% prov.info$CODE),]
+
+# Create a spatial object of the provenance coordinates 
+xyprov.diff <- SpatialPoints(df.diff[,c("longitude","latitude")], 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+# Reproject in ETRS89 - LAEA 
+xyprov.diff <- spTransform(xyprov.diff,crs(raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))))
+
+# for mapping
+xyprovdf.diff <- xyprov.diff@coords %>% as_tibble()
+
+
+
+# ------------------------------------------------------------------------------------------------------------------------------
 # Site coordinates
 # ----------------
+
 df <- unique(data[,c("site","longitude_site","latitude_site")])
 colnames(df) <- c("site","longitude","latitude")
 
-                      # Create a spatial object of the site coordinates 
+# Create a spatial object of the site coordinates 
 xysite <- SpatialPoints(df[,c("longitude","latitude")], 
                         proj4string=CRS("+proj=longlat +datum=WGS84"))
 
@@ -105,6 +154,7 @@ xysite <- spTransform(xysite,crs(raster(paste0("data/Climate/Raw/FromMaurizio/An
 # for mapping
 xysitedf <- xysite@coords %>% as_tibble() %>% mutate(Site=c("Asturias","Bordeaux","Fundão"))
 ```
+
 
 
 ```{r MaritimePineDistri}
@@ -190,7 +240,21 @@ p <- ggRGB(outRast, r=1,g=2, b=3) +
   geom_text(data=xysitedf,aes(x=longitude,y=latitude,label=Site),hjust=1.2, vjust=-1.2, col="red",size=6,fontface="bold") +
   theme_map()
 p
-#ggsave(p,file="maps/maprgb_2.svg") # then I used Inkscape to do the final map
+#ggsave(p,file="maps/maprgb.svg") # then I used Inkscape to do the final map
+
+p <- ggRGB(outRast, r=1,g=2, b=3) + 
+  geom_sf(data = world,color=alpha("gray",0.8),size=0.2,fill=alpha("gray",0.1))  +
+    coord_sf(xlim = c(2500000, 4500000), 
+             ylim = c(1200000,3000000),
+             crs = "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs ") + 
+  geom_point(data=xyprovdf.diff,aes(x=longitude,y=latitude),size=2) +
+  geom_point(data=xyprovdf.common,aes(x=longitude,y=latitude),size=2,shape=9) +
+  geom_point(data=xysitedf,aes(x=longitude,y=latitude),col="red",size=3,shape=17) +
+  geom_text(data=xysitedf,aes(x=longitude,y=latitude,label=Site),hjust=1.2, vjust=-1.2, col="red",size=6,fontface="bold") +
+  theme_map()
+p
+
+#ggsave(p,file="maps/maprgb_progtest.svg") # then I used Inkscape to do the final map
 ```
 
 
@@ -208,8 +272,12 @@ clim.val$PCA1 <- pca$x[, 1]
 clim.val$PCA2 <- pca$x[, 2]
 
 cell.num.prov <- raster::extract(rast1,xyprov,cellnumbers=T)[,"cells"]
+cell.num.prov.common <- raster::extract(rast1,xyprov.common,cellnumbers=T)[,"cells"]
+cell.num.prov.diff <- raster::extract(rast1,xyprov.diff,cellnumbers=T)[,"cells"]
 cell.num.site <- raster::extract(rast1,xysite,cellnumbers=T)[,"cells"]
 
+
+# Option with all provenances represented in the same way
 #png("maps/pca.png", width = 1000, height = 1000)
 plot((pca$x[, 1:2]), xlim = xrng, ylim = yrng, pch = ".", cex = 4, col = rgb(rast1[clim.val$cell.num] , 
                                                                              rast2[clim.val$cell.num], 
@@ -225,6 +293,23 @@ points(clim.val$PCA1[clim.val$cell.num %in% cell.num.prov],
 points(clim.val$PCA1[clim.val$cell.num %in% cell.num.site],
        clim.val$PCA2[clim.val$cell.num %in% cell.num.site], pch = 17,cex=1.5,col="red")
 #dev.off() 
+
+
+# Option that differentiate provenance in common or not with the progeny test data
+plot((pca$x[, 1:2]), xlim = xrng, ylim = yrng, pch = ".", cex = 4, col = rgb(rast1[clim.val$cell.num] , 
+                                                                             rast2[clim.val$cell.num], 
+                                                                             rast3[clim.val$cell.num], max = 255), asp = 1)
+arrows(rep(0, lv), rep(0, lv), pca$rotation[vec,1]/scal, pca$rotation[vec, 2]/scal, length = 0.0625,lwd=3)
+jit <- 0.6
+text(pca$rotation[vec, 1]/scal + jit * sign(pca$rotation[vec, 1]), 
+     pca$rotation[vec, 2]/scal + jit * sign(pca$rotation[vec, 2]), 
+     labels = vec,cex=3)
+points(clim.val$PCA1[clim.val$cell.num %in% cell.num.prov.common],
+       clim.val$PCA2[clim.val$cell.num %in% cell.num.prov.common], pch = 9,cex=1.5)
+points(clim.val$PCA1[clim.val$cell.num %in% cell.num.prov.diff],
+       clim.val$PCA2[clim.val$cell.num %in% cell.num.prov.diff], pch = 16,cex=1.5)
+points(clim.val$PCA1[clim.val$cell.num %in% cell.num.site],
+       clim.val$PCA2[clim.val$cell.num %in% cell.num.site], pch = 17,cex=1.5,col="red")
 ```
 
 
