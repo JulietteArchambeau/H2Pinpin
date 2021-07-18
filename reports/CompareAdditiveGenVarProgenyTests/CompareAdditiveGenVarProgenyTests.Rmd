@@ -1,5 +1,6 @@
 ---
-title: "Narrow-sense heritability in progeny tests"
+title: "Validation step with independant height data from a progeny test near Asturias"
+subtitle: "Associating within-population additive genetic variance with the eight potential drivers"
 author: "Juliette Archambeau"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: 
@@ -261,7 +262,9 @@ saveRDS(list.models,file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.r
 
 # Figures
 
-## Trait-specific figures
+## $\beta_{X}$
+
+### Trait-specific figures
 
 ```{r FigureBetaX, fig.height=7,fig.width=11}
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
@@ -314,7 +317,7 @@ p
 ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_BetaX_ProgenyTestAsturias.png"),height=7,width=11)
 ```
 
-## Figure with 5 drivers - Figure 3
+### Figure with 5 drivers - Figure 3
 
 
 ```{r FigsTraitSpecific, fig.height=6.5,fig.width=8}
@@ -381,7 +384,7 @@ ggsave(p, file="figs/PosteriorDistributions/ValidationStep_5Drivers_BetaX_PaperF
 ```
 
 
-## Figure with all drivers - Figure Supp Info
+### Figure with all drivers - Figure Supp Info
 
 ```{r FigSuppInfo,fig.height=6.5,fig.width=10.5}
 traits <- c("HT07","HT10")
@@ -443,3 +446,144 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
 p
 ggsave(p, file="figs/PosteriorDistributions/ValidationStep_AllDrivers_BetaX_PaperFig.png",height=6.5,width=10.5)
 ```
+
+
+## $\sigma^{2}_{C_{p}}$
+
+```{r SigmaClon,eval=F}
+traits <- c("HT07","HT10")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
+
+provs <- unique(data$Prov_code_clonapin) %>% str_sort()
+
+mclapply(traits,function(x){
+
+legend.position <- c(.15, .86)
+  
+p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("sigma2_clon"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prov=rep(provs,8)) %>% 
+  ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("Populations") +
+  ylab(TeX("$\\sigma^{2}_{C_{p}}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = legend.position,
+        legend.background = element_rect(colour = "grey"),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=4))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon_ProgenyTestsAsturias.png"),height=6,width=22)
+  
+})
+```
+
+## Heritabilities
+
+We calculated population-specific heritabilities, such as:
+
+$$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
+
+```{r H2Figures,eval=F}
+traits <- c("HT07","HT10")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
+
+provs <- unique(data$Prov_code_clonapin) %>% str_sort()
+
+mclapply(traits,function(x){
+  
+legend.position <- c(.15, .86)
+  
+p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("h2_prov"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prov=rep(provs,8)) %>% 
+  ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("Populations") +
+  ylab(TeX("$\\H^{2}_{p}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = legend.position,
+        legend.background = element_rect(colour = "grey"),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=4))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_h2prov_ProgenyTestsAsturias.png"),height=6,width=22)
+  
+})
+
+```
+
+## Variance partitioning
+
+
+```{r VartPartFigs,eval=F}
+traits <- c("HT07","HT10")
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
+
+mclapply(traits,function(x){
+  p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("pi"),
+                droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x,
+         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),8)) %>% 
+  
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Clones",
+                            "Blocks",
+                            "Populations",
+                            "Residuals"
+                            )) +
+  theme(legend.position = c(.135, .81),
+        legend.background = element_rect(colour = "grey"),
+        axis.text = element_text(size=25),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=2))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_VarPart_ProgenyTestsAsturias.png"),height=6,width=18)
+  
+})
+
+```
+
