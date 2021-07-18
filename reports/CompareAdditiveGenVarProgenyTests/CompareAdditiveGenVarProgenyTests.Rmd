@@ -314,7 +314,7 @@ p <- df %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,
 
 p
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_BetaX_ProgenyTestAsturias.png"),height=7,width=11)
+ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",trait,"_BetaX.png"),height=7,width=11)
 ```
 
 ### Figure with 5 drivers - Figure 3
@@ -450,7 +450,7 @@ ggsave(p, file="figs/PosteriorDistributions/ValidationStep_AllDrivers_BetaX_Pape
 
 ## $\sigma^{2}_{C_{p}}$
 
-```{r SigmaClon,eval=F}
+```{r SigmaClon,eval=T}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
@@ -488,7 +488,7 @@ p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>%
         panel.grid.major.x=element_blank())  +
     guides(color=guide_legend(ncol=4))
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon_ProgenyTestsAsturias.png"),height=6,width=22)
+ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_SigmaClon.png"),height=6,width=22)
   
 })
 ```
@@ -499,7 +499,7 @@ We calculated population-specific heritabilities, such as:
 
 $$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
 
-```{r H2Figures,eval=F}
+```{r H2Figures,eval=T}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
@@ -537,7 +537,7 @@ p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>%
         panel.grid.major.x=element_blank())  +
     guides(color=guide_legend(ncol=4))
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_h2prov_ProgenyTestsAsturias.png"),height=6,width=22)
+ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_h2prov.png"),height=6,width=22)
   
 })
 
@@ -546,7 +546,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_h2prov_ProgenyTestsAstur
 ## Variance partitioning
 
 
-```{r VartPartFigs,eval=F}
+```{r VartPartFigs,eval=T}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
@@ -581,7 +581,7 @@ mclapply(traits,function(x){
         panel.grid.major.x=element_blank())  +
     guides(color=guide_legend(ncol=2))
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_VarPart_ProgenyTestsAsturias.png"),height=6,width=18)
+ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_VarPart.png"),height=6,width=18)
   
 })
 
