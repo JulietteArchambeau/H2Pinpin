@@ -131,13 +131,13 @@ Dataset of `r dim(data)[1]` observations.
 We performed these analysis for height measured the 17/12/2007 and height measured in 2010.
 
 ```{r WhichTrait,message=F}
-#trait <- "HT07"
+# trait <- "HT07"
 trait <- "HT10" # Height measurement in 2010
 if (trait=="HT10"){
- x.label.histogram= "Height measured in the progeny test of Asturias (17/12/2007)"
+ x.label.histogram= "Height measured in the progeny test of Asturias at XX-month old"
  x.legend = 0.127
 } else if(trait=="HT07"){
- x.label.histogram= "Height measured in the progeny test of Asturias 10 2010"
+ x.label.histogram= "Height measured in the progeny test of Asturias at XX-month old"
  x.legend = 0.386
 }
 
@@ -165,16 +165,40 @@ subdata <- subdata %>% filter(!(Trait==0))
 
 We have now `r dim(subdata)[[1]]` observations in in the dataset. Let's plot it again:
 
-```{r HistogramWithoutZeros}
-ggplot(subdata, aes(x=Trait)) + 
-  geom_histogram(binwidth = 10, fill="seagreen3") +  
+```{r HistogramWithoutZeros,fig.height=6,fig.width=8}
+p <- ggplot(subdata, aes(x=Trait)) + 
+  geom_histogram(binwidth = 10, fill="seagreen3",alpha=0.7) +  
   theme_bw() + 
-  labs(x=x.label.histogram,y="")
+  labs(x=x.label.histogram,y="") +
+  theme(axis.title = element_text(size=16),
+        axis.text = element_text(size=18)) 
+p
+ggsave(p,file = paste0("figs/ExploratoryAnalyses/ValidationStep_",trait,".png"),height=6,width=8)
+```
+
+```{r HistogramWithoutZerosPopSpecific, fig.height=6, fig.width=8}
+p <- ggplot(subdata, aes(x=Trait)) + 
+  geom_histogram(alpha=0.7) + 
+  theme_bw()  +
+  facet_wrap(~as.factor(Prov_code_clonapin)) + 
+  labs(x="",y="") +
+  theme(axis.text.x = element_text(size=10, angle=25),
+        axis.text.y = element_text(size=12),
+        strip.text = element_text(size=14)) 
+p
+ggsave(p,file = paste0("figs/ExploratoryAnalyses/ValidationStep_",trait,"_PopSpecific.png"),height=10,width=13)
 ```
 
 ```{r DesignDataset,message=F}
+# Number of individuals per provenance
+counts.ind <- subdata %>% 
+  dplyr::select(Prov_code_clonapin,Fam,ID) %>% 
+  distinct() %>% 
+  group_by(Prov_code_clonapin) %>% 
+  dplyr::summarise(count.individuals=n())
+
 # Number of family per provenance
-counts <- subdata %>% 
+counts.fam <- subdata %>% 
   dplyr::select(Prov_code_clonapin,Fam) %>% 
   distinct() %>% 
   group_by(Prov_code_clonapin) %>% 
@@ -185,7 +209,8 @@ meta.subdata <- subdata %>%
   dplyr::select(Prov_code_clonapin,Fam,Trait) %>% 
   group_by(Prov_code_clonapin) %>% 
   summarise(mean=mean(Trait),var=var(Trait)) %>% 
-  inner_join(counts,by = "Prov_code_clonapin") 
+  inner_join(counts.fam,by = "Prov_code_clonapin") %>% 
+  inner_join(counts.ind,by = "Prov_code_clonapin")
 
 meta.subdata %>% #print(n=33) %>% 
   kable(digits=2,escape = FALSE) %>%
@@ -194,18 +219,91 @@ meta.subdata %>% #print(n=33) %>%
   column_spec(1, bold = T)
 ```
 
+```{r TablesLatex,eval=F}
+options(knitr.table.format = "latex")
+meta.subdata %>% 
+  dplyr::rename(Populations=Prov_code_clonapin,
+                Mean=mean,
+                Variance=var,
+                "Number of families"=count.families) %>% 
+  kable(escape = FALSE)
+```
+
 Correlation between the number of family per provenance and the within-population variance of the trait: `r cor(meta.subdata$var,meta.subdata$count.families) %>%  round(3)`.
 
 Correlation between the number of family per provenance and the within-population mean of the trait: `r cor(meta.subdata$mean,meta.subdata$count.families) %>% round(3)`.
 
 Correlation between the within-population mean and variance of the trait: `r cor(meta.subdata$var,meta.subdata$mean) %>%  round(3)`.
 
+# Model equation and code
+
+We used the same mathematical model as the one used on CLONAPIN data but replacing clones by families. 
+
+We modeled each trait $y_{bpfr}$ such as:
+
+\begin{equation}
+\begin{aligned}
+y_{bpfr} & \sim  \mathcal{N}(\mu_{bpcf},\sigma^{2}_{r})\\[3pt]
+\mu_{bpf} & =  \beta_{0} +  B_{b} + P_{p} + F_{f(p)}\\[3pt]
+\end{aligned}
+\end{equation}
+
+where $\beta_{0}$ is the global intercept, $B_{b}$ the block intercepts, $P_{p}$ the population intercepts, $F_{f(p)}$ the family intercepts and $\sigma^{2}_{r}$ the residual variance.
+
+The prior of $\beta_{0}$ was weakly informative and centered around the mean of the observed values for the trait under considered, as follows:
+
+$$\beta_{0} \sim \mathcal{N}(\mu_{y},2)$$
+
+The population and block intercepts, $P_{p}$ and $B_{b}$ were considered normally-distributed with variances $\sigma^{2}_{P}$ and $\sigma^{2}_{B}$, such as:
+
+$$\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix} 
+    \sim \mathcal{N}\left(0,
+\begin{bmatrix}\sigma^{2}_{B}\\[3pt]
+\sigma^{2}_{P}\\
+\end{bmatrix}
+\right)\\[3pt]$$
+
+The family intercepts $F_{f(p)}$ were considered to follow some population-specific normal distributions, such as:
+$$F_{f(p)} \sim \mathcal{N}(0,\sigma^{2}_{F_{p}})$$
+
+where $\sigma^{2}_{F_{p}}$ are the population-specific variances among families.
+
+
+To partition the total variance, we parameterize our model so that only the total variance, $\sigma_{tot}^{2}$ has a prior, such that:
+
+\begin{equation}
+\begin{aligned}
+\sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \overline{\sigma_{F_{p}}^{2}} + \sigma_{P}^{2}\\[3pt]
+\sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{r})\\[3pt]
+\sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{B})\\[3pt]
+\sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{P})\\[3pt]
+\overline{\sigma_{F_{p}}} & = \sigma_{tot} \times \sqrt(\pi_{F})\\[3pt]
+\sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
+\end{aligned}
+\end{equation}
+
+where $\overline{\sigma_{F_{p}}}$ and $\overline{\sigma_{F_{p}}^{2}}$ are the mean of the population-specific among-families standard deviations ($\sigma_{F_{p}}$) and variances ($\sigma^{2}_{F_{p}}$), respectively, and $\sum_{l}^{4}\pi_{l}=1$ (using the `simplex` function in `Stan`).
+
+
+The population-specific among-families standard deviations $\sigma_{F_{p}}$ follow a log-normal distribution with mean $\overline{\sigma_{F_{p}}}$ and variance $\sigma^{2}_{K}$, such as: 
+
+\begin{equation}
+\begin{aligned}
+\sigma_{F_{p}} & \sim \mathcal{LN}\left(\ln(\overline{\sigma_{F_{p}}})-\frac{\sigma^{2}_{K}}{2} + \beta_{X}X_{p},\sigma^{2}_{K}\right)\\[3pt]
+\sigma_{K} & \sim \exp(1)\\[3pt]
+\end{aligned}
+\end{equation}
+
+with $X_{p}$ the potential driver considered and $\beta_{x}$ its associated coefficient.
+
+```{r ModelCompilation,eval=T}
+model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+model
+```
+
 
 # Running the models
 
-```{r ModelCompilation,eval=F}
-model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
-```
 
 ```{r StanLists, eval=F}
 #### Downloading and merging the dataset with the potential drivers
@@ -450,7 +548,7 @@ ggsave(p, file="figs/PosteriorDistributions/ValidationStep_AllDrivers_BetaX_Pape
 
 ## $\sigma^{2}_{C_{p}}$
 
-```{r SigmaClon,eval=T}
+```{r SigmaClon,eval=F}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
@@ -499,7 +597,7 @@ We calculated population-specific heritabilities, such as:
 
 $$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
 
-```{r H2Figures,eval=T}
+```{r H2Figures,eval=F}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
@@ -546,7 +644,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_h2prov.pn
 ## Variance partitioning
 
 
-```{r VartPartFigs,eval=T}
+```{r VartPartFigs,eval=F}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
