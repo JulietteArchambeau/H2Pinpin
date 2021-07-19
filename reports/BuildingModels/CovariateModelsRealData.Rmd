@@ -69,7 +69,6 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 ```
 
-`r knitr::opts_chunk$set(eval = F)`
 
 ```{r OptionDocs}
 # Options for sampling
@@ -87,44 +86,74 @@ point.est="median"
 conf.level <- 0.95
 ```
 
-# Mathematical model
+# Model equation and code
 
-In this document, we aim to estimate the relationship between potential drivers (namely, two admixture scores, four indexes of environmental heterogeneity and two indexes of climatic harshness) and the within-population genetic variation. 
+In this document, we aimed to estimate the relationship between potential drivers (namely, two admixture scores, four indexes of environmental heterogeneity and two indexes of climatic harshness) and the within-population genetic variation. 
 
-For each potential driver $X_{p}$, we model the normally-distributed traits $y_{bpcr}$ with the following statistical model:
+We modeled each trait $y_{bpcr}$ such as:
 
 \begin{equation}
 \begin{aligned}
 y_{bpcr} & \sim  \mathcal{N}(\mu_{bpc},\sigma^{2}_{r})\\[3pt]
 \mu_{bpc} & =  \beta_{0} +  B_{b} + P_{p} + C_{c(p)}\\[3pt]
-\beta_{0} & \sim \mathcal{N}(\mu_{y},2)\\[3pt]
-\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix} 
-    &\sim \mathcal{N}\left(0,
-\begin{bmatrix}
-\sigma^{2}_{B}\\[3pt]
+\end{aligned}
+\end{equation}
+
+where $\beta_{0}$ is the global intercept, $B_{b}$ the block intercepts, $P_{p}$ the population intercepts, $C_{c(p)}$ the clone intercepts and $\sigma^{2}_{r}$ the residual variance.
+
+The prior of $\beta_{0}$ was weakly informative and centered around the mean of the observed values for the trait under considered, as follows:
+
+$$\beta_{0} \sim \mathcal{N}(\mu_{y},2)$$
+
+The population and block intercepts, $P_{p}$ and $B_{b}$ were considered normally-distributed with variances $\sigma^{2}_{P}$ and $\sigma^{2}_{B}$, such as:
+
+$$\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix} 
+    \sim \mathcal{N}\left(0,
+\begin{bmatrix}\sigma^{2}_{B}\\[3pt]
 \sigma^{2}_{P}\\
 \end{bmatrix}
-\right)\\[3pt]
-C_{c(p)} & \sim \mathcal{N}(0,\sigma^{2}_{C_{p}})\\[3pt]
-\overline{\sigma_{C_{p}}^{2}} & = \frac{\sum_{p=1}^{33} \sigma_{C_{p}}^{2}}{33} \\[3pt]
+\right)\\[3pt]$$
+
+The clone intercepts $C_{c(p)}$ were considered to follow some population-specific normal distributions, such as:
+$$C_{c(p)} \sim \mathcal{N}(0,\sigma^{2}_{C_{p}})$$
+
+where $\sigma^{2}_{C_{p}}$ are the population-specific variances among clones.
+
+To partition the total variance, we parameterize our model so that only the total variance, $\sigma_{tot}^{2}$ has a prior, such that:
+
+\begin{equation}
+\begin{aligned}
 \sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \overline{\sigma_{C_{p}}^{2}} + \sigma_{P}^{2}\\[3pt]
 \sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{r})\\[3pt]
 \sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{B})\\[3pt]
 \sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{P})\\[3pt]
-\sigma_{C_{p}} & \sim \mathcal{LN}\left(\ln\left(\sigma_{tot} \times  \sqrt(\pi_{C})\right)-\frac{\sigma^{2}_{K}}{2} + \beta_{x}X_{p},\sigma^{2}_{K}\right)\\[3pt]
-\sigma_{K} & \sim \exp(1)\\[3pt]
+\overline{\sigma_{C_{p}}} & = \sigma_{tot} \times \sqrt(\pi_{C})\\[3pt]
 \sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
 \end{aligned}
 \end{equation}
 
+where $\overline{\sigma_{C_{p}}}$ and $\overline{\sigma_{C_{p}}^{2}}$ are the mean of the population-specific among-clones standard deviations ($\sigma_{C_{p}}$) and variances ($\sigma^{2}_{C_{p}}$), respectively, and $\sum_{l}^{4}\pi_{l}=1$ (using the `simplex` function in `Stan`).
+
+The population-specific among-clones standard deviations $\sigma_{C_{p}}$ follow a log-normal distribution with mean $\overline{\sigma_{C_{p}}}$ and variance $\sigma^{2}_{K}$, such as: 
+
+\begin{equation*}
+\begin{aligned}
+\sigma_{C_{p}} & \sim \mathcal{LN}\left(\ln(\overline{\sigma_{C_{p}}})-\frac{\sigma^{2}_{K}}{2} + \beta_{X}X_{p},\sigma^{2}_{K}\right)\\[3pt]
+\sigma_{K} & \sim \exp(1)\\[3pt]
+\end{aligned}
+\end{equation*}
+
+with $X_{p}$ the potential driver considered and $\beta_{x}$ its associated coefficient.
 
 
 Here is the stan model code:
 
-```{r ModelCompilation,eval=F}
+```{r ModelCompilation}
 model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+model
 ```
 
+`r knitr::opts_chunk$set(eval = F)`
 
 # Functions used
 
