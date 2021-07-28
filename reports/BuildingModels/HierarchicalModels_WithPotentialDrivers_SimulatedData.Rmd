@@ -129,7 +129,7 @@ Comments for the log-normal:
 ```{r Options}
 # The simulations are based on height measured in the common gardens, but here
 # we can choose on which common garden/year the simulations are based:
- trait <- "POR_htoct12"   # Fundão (Portugal) - October 2012
+ trait <- "POR_htoct12"   # Portugal - October 2012
 # trait <- "BDX_htnov13" # Pierroton (France) - November 2013
 # trait <- "BDX_htnov18" # Pierroton (France) - November 2018
 # trait <- "AST_htdec11" # Cabada (Asturias, Spain) - November 2012

@@ -75,7 +75,7 @@ Sum-up of the traits selected in this study:
 
   - Height:
       
-      - In Fundão (Portugal): height in October 2012 when the trees were 20 month old.
+      - In Portugal (Fundão): height in October 2012 when the trees were 20 month old.
       
       - In Cabada (Asturias, Spain): height in November 2012 when the trees were 21 month old.
       
@@ -371,7 +371,7 @@ ggsave(p,file="figs/ExploratoryAnalyses/HeightAsturias2012_EMTgradient.png",heig
 ```
 
 
-## Fundão (Portugal) - October 2012
+## Portugal (Fundão) - October 2012
 
 ```{r BBhistFundao, fig.height=10,fig.width=10,warning=F}
 plot_grid(
@@ -829,11 +829,11 @@ ymean = 0.82
 yvar = 0.92
 
 p <- plot_grid(
-  # Height Fundão (Portugal) 2012
+  # Height Portugal (Fundão) 2012
 ggplot(data, aes(x= POR_htoct12)) + 
   geom_histogram(binwidth = 20,fill="#B2182B",alpha=0.7) +  
   theme_bw() +
-  labs(x="Height (Fundão, 20 months, mm)",y="") +
+  labs(x="Height (Portugal, 20 months, mm)",y="") +
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(data$POR_htoct12,na.rm=T),2)), 
                                       x=0.7,  
@@ -937,11 +937,11 @@ ggplot(meanDBB,aes(x= mean)) +
                                       hjust=0,
                                       gp=gpar(fontsize=fontsize)))),
 
-  # SLA Fundão 
+  # SLA Portugal 
 ggplot(data, aes(x= log(POR_SLA))) + 
   geom_histogram(binwidth = 0.01,fill="#4575B4",alpha=0.7) +  
   theme_bw() + 
-  labs(x=TeX("Log(Surface Leaf Area) (Fundão, m$^{2}$/kg)"),y="") +
+  labs(x=TeX("Log(Surface Leaf Area) (Portugal, m$^{2}$/kg)"),y="") +
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(log(data$POR_SLA),na.rm=T),2)), 
                                       x=0.7,  
@@ -954,11 +954,11 @@ ggplot(data, aes(x= log(POR_SLA))) +
                                       y=ymean, 
                                       hjust=0,
                                       gp=gpar(fontsize=fontsize)))),
-  # delta 13 C Fundão 
+  # delta 13 C Portugal
 ggplot(data, aes(x= d13C)) + 
   geom_histogram(binwidth = 0.1,fill="#ABD9E9",alpha=0.7) +  
   theme_bw() + 
-  labs(x=TeX("$\\delta^{13}C$ (Fundão, ‰)"),y="")+
+  labs(x=TeX("$\\delta^{13}C$ (Portugal, ‰)"),y="")+
   annotation_custom(grobTree(textGrob(paste0("Variance : ",
                                              round(var(data$d13C,na.rm=T),2)), 
                                       x=0.7,  
@@ -983,7 +983,7 @@ ggsave(p,file=paste0("figs/ExploratoryAnalyses/TraitsDistribution.png"),width = 
 # the numbers in the columns "Trees", "Populations" and "Clones" were checked with the model inputs (May 12th)
 tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud burst","Surface Leaf Area","$\\delta^{13}$C"),
        
-       "Common gardens"=c("Fundão",rep("Bordeaux",2),"Cabada",rep("Bordeaux",2),rep("Fundão",2)),
+       "Common gardens"=c("Portugal",rep("Bordeaux",2),"Cabada",rep("Bordeaux",2),rep("Portugal",2)),
        
        "Dates of measurement" =c("October 2012","November 2013", "November 2018","November 2012", "2013, 2014, 2015, 2017", "2014, 2015 2017", NA,NA),
        
@@ -1006,14 +1006,14 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
       
        "Units"=c(rep("mm",4),"°C-day","°C-day","m$^{2}$/kg","‰"),
        
-       "Trees"=c(length(data$tree[!is.na(data$POR_htoct12)]),  # height Fundão (Portugal) 2012
+       "Trees"=c(length(data$tree[!is.na(data$POR_htoct12)]),  # height Portugal 2012
                  length(data$tree[!is.na(data$BDX_htnov13)]),  # height Bordeaux 2013
                  length(data$tree[!is.na(data$BDX_htnov18)]),  # height Bordeaux 2018
                  length(data$tree[!is.na(data$AST_htnov12)]),  # height Cabada (Asturias) 2012
                  length(meanBB$tree[!is.na(meanBB$mean)]),     # mean bud burst date Bordeaux
                  length(meanDBB$tree[!is.na(meanDBB$mean)]),   # mean duration bud burst Bordeaux
-                 length(data$tree[!is.na(data$POR_SLA)]),      # SLA Fundão 
-                 length(data$tree[!is.na(data$d13C)])),        # delta 13 C Fundão 
+                 length(data$tree[!is.na(data$POR_SLA)]),      # SLA Portugal 
+                 length(data$tree[!is.na(data$d13C)])),        # delta 13 C Portugal 
        
         "Populations" = c(length(unique(data$prov[!is.na(data$POR_htoct12)])), # height Portugal 2012
                           length(unique(data$prov[!is.na(data$BDX_htnov13)])), # height Bordeaux 2013
@@ -1021,8 +1021,8 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
                           length(unique(data$prov[!is.na(data$AST_htnov12)])), # height Asturias 2012
                           length(unique(meanBB$prov[!is.na(meanBB$mean)])),    # mean bud burst date Bordeaux
                           length(unique(meanDBB$prov[!is.na(meanDBB$mean)])),  # mean duration bud burst Bordeaux
-                          length(unique(data$prov[!is.na(data$POR_SLA)])),     # SLA Fundão 
-                          length(unique(data$prov[!is.na(data$d13C)]))),       # delta 13 C Fundão 
+                          length(unique(data$prov[!is.na(data$POR_SLA)])),     # SLA Portugal 
+                          length(unique(data$prov[!is.na(data$d13C)]))),       # delta 13 C Portugal 
                           
         "Clones" = c(length(unique(data$clon[!is.na(data$POR_htoct12)])), # height Portugal 2012
                      length(unique(data$clon[!is.na(data$BDX_htnov13)])), # height Bordeaux 2013
@@ -1030,8 +1030,8 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
                      length(unique(data$clon[!is.na(data$AST_htnov12)])), # height Asturias 2012
                      length(unique(meanBB$clon[!is.na(meanBB$mean)])),    # mean bud burst date Bordeaux
                      length(unique(meanDBB$clon[!is.na(meanDBB$mean)])),  # mean duration bud burst Bordeaux
-                     length(unique(data$clon[!is.na(data$POR_SLA)])),     # SLA Fundão 
-                     length(unique(data$clon[!is.na(data$d13C)]))),       # delta 13 C Fundão   
+                     length(unique(data$clon[!is.na(data$POR_SLA)])),     # SLA Portugal 
+                     length(unique(data$clon[!is.na(data$d13C)]))),       # delta 13 C Portugal   
        
         "Blocks" = c(length(unique(data$block[!is.na(data$POR_htoct12)])), # height Portugal 2012
                      length(unique(data$block[!is.na(data$BDX_htnov13)])), # height Bordeaux 2013
@@ -1039,8 +1039,8 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
                      length(unique(data$block[!is.na(data$AST_htnov12)])), # height Asturias 2012
                      length(unique(meanBB$block[!is.na(meanBB$mean)])),    # mean bud burst date Bordeaux
                      length(unique(meanDBB$block[!is.na(meanDBB$mean)])),  # mean duration bud burst Bordeaux
-                     length(unique(data$block[!is.na(data$POR_SLA)])),     # SLA Fundão 
-                     length(unique(data$block[!is.na(data$d13C)])))        # delta 13 C Fundão   
+                     length(unique(data$block[!is.na(data$POR_SLA)])),     # SLA Portugal 
+                     length(unique(data$block[!is.na(data$d13C)])))        # delta 13 C Portugal   
           ) %>% 
   
   kable(caption="Table XX of the paper",escape = FALSE) %>%

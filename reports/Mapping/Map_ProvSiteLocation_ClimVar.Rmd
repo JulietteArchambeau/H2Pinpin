@@ -152,7 +152,7 @@ xysite <- SpatialPoints(df[,c("longitude","latitude")],
 xysite <- spTransform(xysite,crs(raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))))
 
 # for mapping
-xysitedf <- xysite@coords %>% as_tibble() %>% mutate(Site=c("Asturias","Bordeaux","Fundão"))
+xysitedf <- xysite@coords %>% as_tibble() %>% mutate(Site=c("Asturias","Bordeaux","Portugal"))
 ```
 
 

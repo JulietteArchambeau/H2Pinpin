@@ -391,7 +391,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
-                                "Height (Fundão, 20 months)",
+                                "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
@@ -400,7 +400,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
                      values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
   scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
-                                "Height (Fundão, 20 months)",
+                                "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
@@ -468,7 +468,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
-                                "Height (Fundão, 20 months)",
+                                "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
@@ -477,7 +477,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
                      values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
   scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
-                                "Height (Fundão, 20 months)",
+                                "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
@@ -522,7 +522,7 @@ p <- df.betaX %>%
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   coord_flip() +
   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
-                     labels = rev(c("Height (Fundão, 20 months)",
+                     labels = rev(c("Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Height (Bordeaux, 25 months)",
                                 "Height (Bordeaux, 85 months)",
@@ -540,7 +540,6 @@ p <- df.betaX %>%
     guides(color=guide_legend(reverse=TRUE))
 
 p
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX.png",height=10,width=10)
 
 
 # Option 2
@@ -559,7 +558,7 @@ p <- df.betaX %>%
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   coord_flip() +
   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
-                     labels = rev(c("Height (Fundão, 20 months)",
+                     labels = rev(c("Height (Portugal, 20 months)",
                                 "Height (Bordeaux, 25 months)",
                                 "Height (Bordeaux, 85 months)",
                                 "Height (Asturias, 21 months)",
@@ -576,7 +575,6 @@ p <- df.betaX %>%
     panel.grid.major.y=element_blank()) +
     guides(color=guide_legend(reverse=TRUE))
 p
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid.png",height=10,width=10)
 
 
 df.betaX  <- df.betaX %>%
@@ -608,7 +606,7 @@ df.betaX  <- df.betaX %>%
 #   #facet_grid(~fct_relevel(Hyp,"Admixture","Climate harshness","Environmental heterogeneity"))
 #   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
 #   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
-#                      labels = rev(c("Height (Fundão, 20 months)",
+#                      labels = rev(c("Height (Portugal, 20 months)",
 #                                 "Height (Bordeaux, 25 months)",
 #                                 "Height (Bordeaux, 85 months)",
 #                                 "Height (Asturias, 21 months)",
@@ -645,7 +643,7 @@ p <- df.betaX %>%
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   #coord_flip() +
   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
-                     labels = rev(c("Height (Fundão, 20 months)",
+                     labels = rev(c("Height (Portugal, 20 months)",
                                 "Height (Bordeaux, 25 months)",
                                 "Height (Bordeaux, 85 months)",
                                 "Height (Asturias, 21 months)",
@@ -669,7 +667,6 @@ p <- df.betaX %>%
     
 p
 
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid_Reverse_LegendBottomLeft.png",height=8,width=14)
 
 df.betaX$Hyp <- factor(df.betaX$Xp,
                       levels=c("SHM","invEMT","EH1[20km]","EH1[1.6km]","EH2[20km]","EH2[1.6km]","D","A"))
@@ -686,7 +683,7 @@ p <- df.betaX %>%
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   #coord_flip() +
   scale_color_manual(values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")),
-                     labels = rev(c("Height (Fundão, 20 months)",
+                     labels = rev(c("Height (Portugal, 20 months)",
                                 "Height (Bordeaux, 25 months)",
                                 "Height (Bordeaux, 85 months)",
                                 "Height (Asturias, 21 months)",
@@ -709,8 +706,6 @@ p <- df.betaX %>%
     guides(color=guide_legend(reverse=TRUE))
     
 p
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_FacetGrid_Reverse_LegendBottomLeft_5Drivers.png",
-       height=8,width=10)
 ```
 
 
@@ -1035,7 +1030,7 @@ df <- traits %>%
                        Traits=="MeanDBB"~"Phenology",
                        Traits=="POR_SLA"~"Functional traits",
                        Traits=="d13C"~"Functional traits"),
-         trait.names=case_when(Traits=="POR_htoct12"~"Fundão 20m",
+         trait.names=case_when(Traits=="POR_htoct12"~"Portugal 20m",
                        Traits=="BDX_htnov13"~"Bordeaux 25m",
                        Traits=="BDX_htnov18"~"Bordeaux 85m",
                        Traits=="AST_htnov12"~"Asturias 21m",
@@ -1292,7 +1287,7 @@ p <- CTDbetaX  %>%   ggplot(aes(x = driver, y = estimate,ymin = conf.low, ymax =
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
   scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
-                                "Height (Fundão, 20 months)",
+                                "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
@@ -1301,7 +1296,7 @@ p <- CTDbetaX  %>%   ggplot(aes(x = driver, y = estimate,ymin = conf.low, ymax =
                      values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
   scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
-                                "Height (Fundão, 20 months)",
+                                "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
