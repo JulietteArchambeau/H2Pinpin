@@ -128,16 +128,16 @@ Dataset of `r dim(data)[1]` observations.
 
 # Height distribution - exploratory analyses
 
-We performed these analysis for height measured the 17/12/2007 and height measured in 2010.
+We performed these analysis for height measured the 17/12/2007 (when the trees were 3-year old) and height measured in 2010 (when the trees were 6-year old).
 
 ```{r WhichTrait,message=F}
-# trait <- "HT07"
-trait <- "HT10" # Height measurement in 2010
+ trait <- "HT07" # Height measurement in 2007
+#trait <- "HT10" # Height measurement in 2010
 if (trait=="HT10"){
- x.label.histogram= "Height measured in the progeny test of Asturias at XX-month old"
+ x.label.histogram= "Height measured in the progeny test of Asturias at 3-year old"
  x.legend = 0.127
 } else if(trait=="HT07"){
- x.label.histogram= "Height measured in the progeny test of Asturias at XX-month old"
+ x.label.histogram= "Height measured in the progeny test of Asturias at 6-year old"
  x.legend = 0.386
 }
 
@@ -462,7 +462,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
-  scale_colour_manual(labels = c("Height (2007)","Height (2010)"), 
+  scale_colour_manual(labels = c("Height (3-year old)","Height (6-year old)"), 
                       values=c("#FDAE61","#B2182B")) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
@@ -474,8 +474,8 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
       legend.background = element_rect(colour = "grey"),
       strip.text.x = element_text(size = 14),
       panel.grid.minor.x=element_blank(),
-      panel.grid.major.x=element_blank()) +
-    guides(color=guide_legend(ncol=2))
+      panel.grid.major.x=element_blank()) #+
+    #guides(color=guide_legend(ncol=2))
 
 p
 ggsave(p, file="figs/PosteriorDistributions/ValidationStep_5Drivers_BetaX_PaperFig.png",height=6.5,width=8)
@@ -526,7 +526,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
-  scale_colour_manual(labels = c("Height (2007)","Height (2010)"), 
+  scale_colour_manual(labels = c("Height (3-year old)","Height (6-year old)"), 
                       values=c("#FDAE61","#B2182B")) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
