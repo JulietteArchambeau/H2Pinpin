@@ -131,13 +131,13 @@ Dataset of `r dim(data)[1]` observations.
 We performed these analysis for height measured the 17/12/2007 (when the trees were 3-year old) and height measured in 2010 (when the trees were 6-year old).
 
 ```{r WhichTrait,message=F}
- trait <- "HT07" # Height measurement in 2007
-#trait <- "HT10" # Height measurement in 2010
+# trait <- "HT07" # Height measurement in 2007 (3-year old)
+  trait <- "HT10" # Height measurement in 2010 (6-year old)
 if (trait=="HT10"){
- x.label.histogram= "Height measured in the progeny test of Asturias at 3-year old"
+ x.label.histogram= "Height measured in the progeny test of Asturias at 6-year old"
  x.legend = 0.127
 } else if(trait=="HT07"){
- x.label.histogram= "Height measured in the progeny test of Asturias at 6-year old"
+ x.label.histogram= "Height measured in the progeny test of Asturias at 3-year old"
  x.legend = 0.386
 }
 
