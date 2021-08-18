@@ -289,7 +289,7 @@ saveRDS(list.models,file=paste0("outputs/models/",trait,".rds"))
 }
 ```
 
-We use the `loo` package to compare the models based on the (ELPD)[http://mc-stan.org/loo/reference/loo-glossary.html].
+We use the `loo` package to compare the models based on the [ELPD](http://mc-stan.org/loo/reference/loo-glossary.html).
 
 ```{r Loo,eval=F}
 loos <- mclapply(list.models,loo)
