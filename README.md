@@ -7,7 +7,7 @@ Here you can find the `html` corresponding to the `.md` files in `H2Pinpin/repor
 
 1. In the folder `ExplanatoryAnalyses`: 
 
-    - 
+    - [Exploratoy analyses on the eight phenotypic traits under study](https://juliettearchambeau.github.io/H2Pinpin/ExploratoryAnalysesPhenotypicData.html)
     
 2. In the folder `CalculatingDrivers`:
 
