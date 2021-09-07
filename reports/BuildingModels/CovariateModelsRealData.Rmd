@@ -12,6 +12,7 @@ output:
        collapsed: false
     number_sections: true
     highlight: textmate
+bibliography: references.bibtex
 editor_options: 
   chunk_output_type: console
 ---
@@ -1266,7 +1267,7 @@ saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 ```
 
 
-```{r FigureCTD}
+```{r FigureCTD, eval=T, fig.height=9,fig.width=9}
 CTDbetaX <- readRDS(file=paste0("outputs/models/CTDbetaX.rds"))
 
 traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
@@ -1319,4 +1320,235 @@ p
 
 ggsave(p,file="figs/PosteriorDistributions/CTD.png",height=9,width=9)
 ```
+
+
+# Genetic diversity
+
+We want to estimate the relationship between within-population quantitative genetic variation and genetic diversity (*expected Nei’s heterozygosity* $H_e$), to check that demographic factors do not influence quantitative genetic variation. For that, we take the Nei’s heterozygosity $H_e$ values from @rodriguez2016capturing, for both nuSSRs (12 nuclear microsatellites) and SNPs (266 SNP markers).
+
+```{r GeneticDiversityRodriguezQuilon}
+drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
+    dplyr::select(prov) %>% 
+    dplyr::mutate(He.nuSSRs=case_when(prov=="HOU" ~ 0.55,
+                                      prov=="VER" ~ 0.57,
+                                      prov=="MIM" ~ 0.58,
+                                      prov=="OLO" ~ 0.57,
+                                      prov=="PET" ~ 0.55,
+                                      prov=="PLE" ~ 0.61,
+                                      prov=="STJ" ~ 0.60,
+                                      prov=="ALT" ~ 0.66,
+                                      prov=="ARM" ~ 0.56,
+                                      prov=="CAD" ~ 0.55,
+                                      prov=="CAS" ~ 0.54,
+                                      prov=="LAM" ~ 0.50,
+                                      prov=="LEI" ~ 0.62,
+                                      prov=="PUE" ~ 0.54,
+                                      prov=="SAC" ~ 0.59,
+                                      prov=="SEG" ~ 0.56,
+                                      prov=="SIE" ~ 0.56,
+                                      prov=="ARN" ~ 0.58,
+                                      prov=="BAY" ~ 0.58,
+                                      prov=="BON" ~ 0.57,
+                                      prov=="CAR" ~ 0.65,
+                                      prov=="CEN" ~ 0.56,
+                                      prov=="COC" ~ 0.60,
+                                      prov=="CUE" ~ 0.63,
+                                      prov=="OLB" ~ 0.58,
+                                      prov=="QUA" ~ 0.64,
+                                      prov=="SAL" ~ 0.58,
+                                      prov=="VAL" ~ 0.55,
+                                      prov=="PIA" ~ 0.52,
+                                      prov=="PIE" ~ 0.52,
+                                      prov=="COM" ~ 0.76,
+                                      prov=="ORI" ~ 0.64,
+                                      prov=="TAM" ~ 0.55),
+                    He.SNPs=case_when(prov=="HOU" ~ 0.25,
+                                      prov=="VER" ~ 0.26,
+                                      prov=="MIM" ~ 0.26,
+                                      prov=="OLO" ~ 0.25,
+                                      prov=="PET" ~ 0.26,
+                                      prov=="PLE" ~ 0.27,
+                                      prov=="STJ" ~ 0.26,
+                                      prov=="ALT" ~ 0.24,
+                                      prov=="ARM" ~ 0.23,
+                                      prov=="CAD" ~ 0.24,
+                                      prov=="CAS" ~ 0.24,
+                                      prov=="LAM" ~ 0.23,
+                                      prov=="LEI" ~ 0.26,
+                                      prov=="PUE" ~ 0.23,
+                                      prov=="SAC" ~ 0.24,
+                                      prov=="SEG" ~ 0.25,
+                                      prov=="SIE" ~ 0.26,
+                                      prov=="ARN" ~ 0.29,
+                                      prov=="BAY" ~ 0.28,
+                                      prov=="BON" ~ 0.30,
+                                      prov=="CAR" ~ 0.27,
+                                      prov=="CEN" ~ 0.27,
+                                      prov=="COC" ~ 0.29,
+                                      prov=="CUE" ~ 0.28,
+                                      prov=="OLB" ~ 0.29,
+                                      prov=="QUA" ~ 0.29,
+                                      prov=="SAL" ~ 0.28,
+                                      prov=="VAL" ~ 0.28,
+                                      prov=="PIA" ~ 0.25,
+                                      prov=="PIE" ~ 0.25,
+                                      prov=="COM" ~ 0.30,
+                                      prov=="ORI" ~ 0.29,
+                                      prov=="TAM" ~ 0.19)) %>% 
+    dplyr::mutate(dplyr::across(-prov,scale))
+```
+
+```{r FunctionFormatGeneticDiversity}
+FormatGeneticDiversity <- function(trait){
+
+if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
+    CenterResponseVariable <- TRUE
+    LogResponseVariable <- FALSE
+    
+  }  else if(trait=="POR_SLA"){
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- TRUE
+  } else {
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- FALSE
+  }
+  
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::mutate(trait = rowMeans(dplyr::select(.,contains("BDX")),na.rm=T)) %>%
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov") 
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov")
+  
+  }
+  
+  var.He <- c("He.nuSSRs","He.SNPs")
+  
+  list.stan <- lapply(var.He, function(x)    {
+    list(N=length(df$tree),
+         y=df$trait,
+         X=as.numeric(pull(unique(df[,c(x,"prov")]) %>% dplyr::select(contains(x)))),
+         nprov = length(unique(df$prov)),
+         nclon = length(unique(df$clon)),
+         nblock = length(unique(df$block)),
+         prov = as.numeric(as.factor(df$prov)),
+         which_prov = as.numeric(as.factor(pull(unique(df[c("prov","clon")])[,"prov"]))),
+         clon = as.numeric(as.factor(df$clon)),
+         bloc = as.numeric(as.factor(df$block)))})
+  
+  names(list.stan) <- var.He
+  
+  return(list.stan)
+}
+```
+
+
+
+```{r RunningModelsGeneticDiversity}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+GenDivbetaX <- lapply(traits, function(trait) {
+  
+  list.stan <- FormatGeneticDiversity(trait)
+  
+  
+  output <- lapply(names(list.stan), function(x){
+    
+    mod <- sampling(model, 
+                  data = list.stan[[x]], 
+                  pars=c("betaX"),
+                  iter = n_iter, 
+                  chains = n_chains, 
+                  cores = n_chains,
+                  save_warmup = save_warmup,
+                  thin=n_thin)
+  
+    broom::tidyMCMC(mod,pars=(c("betaX")),
+                  droppars = NULL, estimate.method = "median", ess = T, rhat = T, conf.int = T,conf.level = 0.95) %>% 
+      dplyr::mutate(driver=x)
+    
+  }) %>% bind_rows
+  
+  
+  })
+
+names(GenDivbetaX) <- traits
+GenDivbetaX %>% bind_rows(.id="Trait")
+
+saveRDS(GenDivbetaX,file=paste0("outputs/models/GenDivbetaX.rds"))
+```
+
+
+```{r FigureGeneticDiversity, eval=T, fig.height=9,fig.width=13}
+GenDivbetaX <- readRDS(file=paste0("outputs/models/GenDivbetaX.rds"))
+
+traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+GenDivbetaX <- 
+  GenDivbetaX %>% 
+  bind_rows(.id="Traits")
+
+GenDivbetaX $Traits <- as.factor(GenDivbetaX $Traits)
+GenDivbetaX $Traits <- factor(GenDivbetaX $Traits,levels=rev(c(traits)))
+
+d13c <- parse(text = TeX("$\\delta^{13}C$"))
+
+p <- GenDivbetaX  %>%   ggplot(aes(x = driver, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), # 
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
+p
+
+ggsave(p,file="figs/PosteriorDistributions/GeneticDiversity_betaX.png",height=9,width=13)
+```
+
+
+# Bibliography
+
 
