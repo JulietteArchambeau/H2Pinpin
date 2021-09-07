@@ -3,7 +3,7 @@
 
 This repository contains the scripts used in Archambeau et al. 2021 *Extreme climatic events but not environmental heterogeneity shape within-population genetic variation in maritime pine*.
 
-Preprint available here:
+Preprint available here: https://www.biorxiv.org/content/10.1101/2021.08.17.456636v1.abstract
 
 **Paper abstract:**
 
