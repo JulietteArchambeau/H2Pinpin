@@ -523,7 +523,7 @@ gdal_translate -of GTiff sagafiles/EuropeForestAreas.sdat EuropeForestAreas.tif
 # Load the mosaic of forested areas tiles
 rast <- raster("data/ForestedAreas/ForestedAreasMasks/EuropeForestAreas.tif")
 
-                    # Create a mask at 1000 m resolution and CRS ETRS89-LAEA Europe
+# Create a mask at 1000 m resolution and CRS ETRS89-LAEA Europe
 eu.mask <- crop(rast,extent(prc01)) 
 eu.mask <- raster::resample(eu.mask,prc01) 
 eu.mask <- mask(prc01,eu.mask)
@@ -596,10 +596,10 @@ submor <- mor[mor$LCCCode == "21499-121340" |
               mor$LCCCode == "21496 // 21497-15048" |
               mor$LCCCode == "21496-121340 // 21497-129401" |
               mor$LCCCode == "21446 // 21450-121340 / 21454" |
-              mor$LCCCode == "21450" | # added
-              mor$LCCCode == "0003 / 0004" | # added
-              mor$LCCCode == "0004 // 0003" | # added
-              mor$LCCCode == "21518",] # added
+              mor$LCCCode == "21450" |
+              mor$LCCCode == "0003 / 0004" |
+              mor$LCCCode == "0004 // 0003" |
+              mor$LCCCode == "21518",]
 
 # Change the CRS
 submor <- spTransform(submor,crs(rast)) # rast is EuropeForestAreas.tif with CRS ETRS89-LAEA Europe
@@ -637,6 +637,38 @@ mask <- raster("data/ForestedAreas/ForestedAreasMasks/ForestedAreasMask.tif") # 
 val <- getValues(mask) 
 n.val <- length(val)
 tab <- tibble(cell.num=1:n.val,mask.values=val) %>% drop_na(mask.values) %>% dplyr::select(-mask.values)
+```
+
+
+```{r FigurePhDDefense, eval=F,echo=F}
+# Figure for the PhD defense:
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))
+
+# xyprov is a spatial object of the provenances coordinates in CRS WGS84
+xyprov <- spTransform(xyprov,crs(rast.var)) # reproject in ETRS89 - LAEA 
+
+# Extent for the Corsican provenances
+ext.laea <- extent(matrix(c( 4220000  ,  2070000, 4300000  , 2130000 ), nrow=2))
+
+pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/EMT_allcells.pdf",height=7.85,width=10)
+plot(rast.var,ext=ext.laea,
+     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 1.8),
+     col=colorRampPalette(c("green","blue"))(255),
+     axes=F)
+plot(xyprov,add=T,pch=18,cex=4)
+dev.off()
+
+
+rast.var <- mask(rast.var,mask,updatevalue=NA) # apply the mask
+
+pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/EMT_20kmcells.pdf",height=7.85,width=10)
+plot(rast.var,ext=ext.laea,
+     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 1.8),
+     col=colorRampPalette(c("green","blue"))(255),
+     axes=F)
+plot(xyprov,add=T,pch=18,cex=4)
+plot(buff20,add=T,lwd=5)
+dev.off()
 ```
 
 
@@ -992,6 +1024,29 @@ plot(xyprov,add=T)
 plot(buff20,add=T)
 text(4215000,2125000, "PIE and PIA",cex=1.4)
 
+# Figure for the PhD Defense:
+# ext.laea <- extent(matrix(c( 4220000  ,  2070000, 4300000  , 2130000 ), nrow=2))
+# rastpop <- rast.pc1
+# pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC1_20kmcells.pdf",height=7.85,width=10)
+# plot(rastpop,ext=ext.laea,
+#      legend.args = list(text = 'PC1',font = 2, line = 0.2, cex = 1.8),
+#      col=colorRampPalette(c("yellow","red"))(255),
+#      axes=F)
+# plot(xyprov,add=T,pch=18,cex=4)
+# plot(buff20,add=T,lwd=5)
+# dev.off()
+
+# rastpop <- rast.pc2
+# pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC2_20kmcells.pdf",height=7.85,width=10)
+# plot(rastpop,ext=ext.laea,
+#      legend.args = list(text = 'PC2',font = 2, line = 0.2, cex = 1.8),
+#      col=colorRampPalette(c("yellow","red"))(255),
+#      axes=F)
+# plot(xyprov,add=T,pch=18,cex=4)
+# plot(buff20,add=T,lwd=5)
+# dev.off()
+
+
 # OLB
 nb=21
 rastpop <- rast.pc1
@@ -1083,6 +1138,32 @@ df %>%
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
+
+
+# # Figure for the PhD Defense:
+# ext.laea <- extent(matrix(c( 4220000  ,  2070000, 4300000  , 2130000 ), nrow=2))
+# buff16 <- buffer(xyprov,width=1600,dissolve=F) # 1km
+# rastpop <- rast.pc1
+# rastpop <- mask(rastpop,buff16,updatevalue=NA)
+# pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC1_1kmcells.pdf",height=7.85,width=10)
+# plot(rastpop,ext=ext.laea,
+#      legend.args = list(text = 'PC1',font = 2, line = 0.2, cex = 1.8),
+#      col=colorRampPalette(c("yellow","red"))(255),
+#      axes=F)
+# plot(xyprov,add=T,pch=18,cex=1)
+# plot(buff16,add=T,lwd=1)
+# dev.off()
+
+# rastpop <- rast.pc2
+# rastpop <- mask(rastpop,buff16,updatevalue=NA)
+# pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC2_1kmcells.pdf",height=7.85,width=10)
+# plot(rastpop,ext=ext.laea,
+#      legend.args = list(text = 'PC2',font = 2, line = 0.2, cex = 1.8),
+#      col=colorRampPalette(c("yellow","red"))(255),
+#      axes=F)
+# plot(xyprov,add=T,pch=18,cex=1)
+# plot(buff16,add=T,lwd=1)
+# dev.off()
 ```
 
 ```{r}
