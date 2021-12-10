@@ -647,12 +647,16 @@ rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))
 # xyprov is a spatial object of the provenances coordinates in CRS WGS84
 xyprov <- spTransform(xyprov,crs(rast.var)) # reproject in ETRS89 - LAEA 
 
+buff20 <- buffer(xyprov,width=20000,dissolve=F) # 20km
+
 # Extent for the Corsican provenances
 ext.laea <- extent(matrix(c( 4220000  ,  2070000, 4300000  , 2130000 ), nrow=2))
 
 pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/EMT_allcells.pdf",height=7.85,width=10)
 plot(rast.var,ext=ext.laea,
-     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 1.8),
+     legend.width=1, legend.shrink=0.8,
+     axis.args=list(cex.axis=2),
+     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 2.5),
      col=colorRampPalette(c("green","blue"))(255),
      axes=F)
 plot(xyprov,add=T,pch=18,cex=4)
@@ -663,11 +667,37 @@ rast.var <- mask(rast.var,mask,updatevalue=NA) # apply the mask
 
 pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/EMT_20kmcells.pdf",height=7.85,width=10)
 plot(rast.var,ext=ext.laea,
-     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 1.8),
+     legend.width=1, legend.shrink=0.8,
+     axis.args=list(cex.axis=2),
+     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 2.5),
      col=colorRampPalette(c("green","blue"))(255),
      axes=F)
 plot(xyprov,add=T,pch=18,cex=4)
 plot(buff20,add=T,lwd=5)
+dev.off()
+
+
+
+ext.laea <- extent(matrix(c(2500000  ,  1300000, 4900000  , 3000000 ), nrow=2))
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/SHM.tif"))
+pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/SHM.pdf",height=7.6,width=10)
+plot(rast.var,ext=ext.laea,
+     legend.width=1, legend.shrink=0.8,
+     axis.args=list(cex.axis=2),
+     legend.args = list(text = 'SHM',font = 2, line = 0.2, cex = 2.5),
+     col=colorRampPalette(c("cyan","purple","orange","yellow"))(255),
+     axes=F, box = FALSE)
+dev.off()
+
+
+rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))
+pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/EMT.pdf",height=7.6,width=10)
+plot(rast.var,ext=ext.laea,
+     legend.width=1, legend.shrink=0.8,
+     axis.args=list(cex.axis=2),
+     legend.args = list(text = 'EMT',font = 2, line = 0.2, cex = 2.5),
+     col=colorRampPalette(c("green","blue"))(255),
+     axes=F, box = FALSE)
 dev.off()
 ```
 
@@ -817,6 +847,17 @@ p <- ggbiplot(pca,obs.scale = 1, var.scale = 1,
 p
 
 ggsave(p,file="figs/CalculatingDrivers/PCA_EnvHetero.png",width=15,height=12)
+
+
+# For PhD Defense:
+# pdefense <- ggbiplot(pca,obs.scale = 1, var.scale = 1,
+#          varname.size =0,alpha = 0.1,
+#          varname.adjust = 1.5) +
+#   theme_bw() +
+#   theme(plot.title = element_text(size=18),
+#         axis.title = element_text(size=45),
+#         axis.text = element_blank())
+# ggsave(pdefense,file="/home/juliette/Documents/Thesis/DEFENSE/figures/PCA.pdf",device="pdf")
 ```
 
 We **assign the PC1 and PC2 scores** to the cells on the map. 
@@ -1029,17 +1070,21 @@ text(4215000,2125000, "PIE and PIA",cex=1.4)
 # rastpop <- rast.pc1
 # pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC1_20kmcells.pdf",height=7.85,width=10)
 # plot(rastpop,ext=ext.laea,
-#      legend.args = list(text = 'PC1',font = 2, line = 0.2, cex = 1.8),
+#      legend.width=1, legend.shrink=0.8,
+#      axis.args=list(cex.axis=2),
+#      legend.args = list(text = 'PC1',font = 2, line = 0.2, cex = 2.5),
 #      col=colorRampPalette(c("yellow","red"))(255),
 #      axes=F)
 # plot(xyprov,add=T,pch=18,cex=4)
 # plot(buff20,add=T,lwd=5)
 # dev.off()
-
+# # 
 # rastpop <- rast.pc2
 # pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC2_20kmcells.pdf",height=7.85,width=10)
 # plot(rastpop,ext=ext.laea,
-#      legend.args = list(text = 'PC2',font = 2, line = 0.2, cex = 1.8),
+#      legend.width=1, legend.shrink=0.8,
+#      axis.args=list(cex.axis=2),
+#      legend.args = list(text = 'PC2',font = 2, line = 0.2, cex = 2.5),
 #      col=colorRampPalette(c("yellow","red"))(255),
 #      axes=F)
 # plot(xyprov,add=T,pch=18,cex=4)
@@ -1147,18 +1192,22 @@ df %>%
 # rastpop <- mask(rastpop,buff16,updatevalue=NA)
 # pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC1_1kmcells.pdf",height=7.85,width=10)
 # plot(rastpop,ext=ext.laea,
-#      legend.args = list(text = 'PC1',font = 2, line = 0.2, cex = 1.8),
+#      legend.width=1, legend.shrink=0.8,
+#      axis.args=list(cex.axis=2),
+#      legend.args = list(text = 'PC1',font = 2, line = 0.2, cex = 2.5),
 #      col=colorRampPalette(c("yellow","red"))(255),
 #      axes=F)
 # plot(xyprov,add=T,pch=18,cex=1)
 # plot(buff16,add=T,lwd=1)
 # dev.off()
-
+# # 
 # rastpop <- rast.pc2
 # rastpop <- mask(rastpop,buff16,updatevalue=NA)
 # pdf("/home/juliette/Documents/Thesis/DEFENSE/figures/PC2_1kmcells.pdf",height=7.85,width=10)
 # plot(rastpop,ext=ext.laea,
-#      legend.args = list(text = 'PC2',font = 2, line = 0.2, cex = 1.8),
+#      legend.width=1, legend.shrink=0.8,
+#      axis.args=list(cex.axis=2),
+#      legend.args = list(text = 'PC2',font = 2, line = 0.2, cex = 2.5),
 #      col=colorRampPalette(c("yellow","red"))(255),
 #      axes=F)
 # plot(xyprov,add=T,pch=18,cex=1)
