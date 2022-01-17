@@ -1001,8 +1001,8 @@ df[,"Dist1000"] <- unlist(lapply(pop.val1, function(x) length(x$cell[x$dist<1000
 ```
 
 
-```{r VisualizationPC1, echo=F, fig.height=16,fig.width=16}
-layout(matrix(1:8,4,2))
+```{r VisualizationPC1, echo=F, fig.height=20,fig.width=16}
+layout(matrix(1:10,5,2))
 
 buff20 <- spTransform(buff20,crs(rast.pc1))
 
@@ -1024,21 +1024,6 @@ plot(buff20,add=T)
 plot(xyprov,add=T)
 text(3060000,2045000, "CEN",cex=1.4)
 
-# ARN
-nb=2
-rastpop <- rast.pc1
-values(rastpop) <- NA
-rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
-plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
-                                 min(pop.val1[[nb]]$coord.y)-3000,
-                                 max(pop.val1[[nb]]$coord.x)+3000,
-                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
-     zlim=c(minPC1,maxPC1),
-     col=colorRampPalette(c("green","blue","yellow","red"))(255))
-plot(buff20,add=T)
-plot(xyprov,add=T)
-text(3010000,2045000, "ARN",cex=1.4)
-
 
 # TAM
 nb=13
@@ -1054,6 +1039,22 @@ plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
 plot(buff20,add=T)
 plot(xyprov,add=T)
 text(2890000,1330000, "TAM",cex=1.4)
+
+# ARN
+nb=2
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3010000,2045000, "ARN",cex=1.4)
+
 
 # Corsica
 ext.laea <- extent(matrix(c( 4220000  ,  2070000, 4290000  , 2130000 ), nrow=2))
@@ -1152,6 +1153,37 @@ plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
 plot(buff20,add=T)
 plot(xyprov,add=T)
 text(3090000,2070000, "VAL",cex=1.4)
+
+# OLO
+nb=15
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3450000,2690000, "OLO",cex=1.4)
+
+
+# HOU
+nb=26
+rastpop <- rast.pc1
+values(rastpop) <- NA
+rastpop[pop.val1[[nb]]$cell] <- pop.val1[[nb]]$value
+plot(rastpop,ext=extent(matrix(c(min(pop.val1[[nb]]$coord.x)-3000,
+                                 min(pop.val1[[nb]]$coord.y)-3000,
+                                 max(pop.val1[[nb]]$coord.x)+3000,
+                                 max(pop.val1[[nb]]$coord.y)+3000), nrow=2)),
+     zlim=c(minPC1,maxPC1),
+     col=colorRampPalette(c("green","blue","yellow","red"))(255))
+plot(buff20,add=T)
+plot(xyprov,add=T)
+text(3500000,2530000, "HOU",cex=1.4)
 ```
 
 ### 1.6-km radius
