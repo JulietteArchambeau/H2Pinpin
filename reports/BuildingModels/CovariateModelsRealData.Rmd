@@ -64,6 +64,7 @@ library(tidytidbits)  # CRAN v0.2.3
 library(tidybayes)    # CRAN v2.0.1
 library(bayesplot)    # CRAN v1.7.1
 library(cowplot)      # CRAN v1.0.0
+library(xtable)
 theme_set(theme_bw(base_size = 20))
 color_scheme_set("green")
 rstan_options(auto_write = TRUE)
@@ -159,7 +160,7 @@ model
 # Functions used
 
 ```{r FunctionDownloadFormatData,eval=F}
-DownloadData <- function(trait){
+DownloadData <- function(trait,sub){
 
 #### Trait transformations
     # Phenology-realted traits and delta13C are centered to help convergence
@@ -179,7 +180,7 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
   }
 
   
-#### Downloading the potential drivers
+#### Downloading and scaling (mean-centering) the potential drivers
   drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
     dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
     dplyr::mutate(across(-prov,scale))
@@ -215,9 +216,30 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
   }
   
   
-  # df %>% dplyr::select(prov,clon) %>% distinct()   %>% group_by(prov) %>% dplyr::summarise(count.clones=n()) %>% print(n=33)
-  # df %>% select(prov,clon,trait) %>% group_by(prov) %>% summarise(mean=mean(trait)) %>% print(n=33)
+########################################################################################################################
+# Option to keep only populations represented by at least 4 clones & clones represented by at least 4 individuals.
+  if(sub=="sub1"|sub=="sub2"){
+
+  ClonesToKeep <- df %>% 
+    dplyr::select(prov,clon) %>% 
+    group_by(clon) %>% 
+    mutate(NbInd = n()) %>% 
+    distinct() %>%
+    filter(NbInd>sub.ind)
   
+  df <- df %>% semi_join(ClonesToKeep, by="clon") 
+  
+  PopsToKeep <- df %>%  
+    dplyr::select(prov,clon) %>% 
+    distinct() %>%  
+    group_by(prov) %>%  
+    dplyr::summarise(NbClones=n()) %>% 
+    filter(NbClones>sub.clones)
+  
+  df <- df %>% semi_join(PopsToKeep, by="prov") 
+  }
+########################################################################################################################
+    
   list.trait <- list(df=df)
 
 #### Create the stan lists:
@@ -239,8 +261,14 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
 }
 
 
+
 ExtractParam <- function(x)  {
-  readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+  ModelOutputs <- if(sub=="sub1"){
+    readRDS(file=paste0("outputs/models/",x,"_sub1.rds"))} else if (sub=="sub2") {
+    readRDS(file=paste0("outputs/models/",x,"_sub2.rds"))} else {
+    readRDS(file=paste0("outputs/models/",x,".rds"))} 
+  
+  ModelOutputs %>% 
   mclapply(function(x) broom::tidyMCMC(x,pars=param,
                 droppars = NULL, 
                 estimate.method = point.est, 
@@ -259,10 +287,30 @@ ExtractParam <- function(x)  {
 For each of the eight trait, we ran eight models, one for each potential drivers:
 
 ```{r RunModel,eval=F}
-traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+########################################
+# Running the models on a filtered dataset or not? (modification after the first round of review in Heredity)
+sub = "no" # if the dataset is not filtered.
+
+### Two filtered datasets:
+
+# Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
+sub = "sub1"
+sub.clones = 3
+sub.ind = 3
+
+# Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
+sub = "sub2"
+sub.clones = 10
+sub.ind = 6
+########################################
+
+if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
+
 
 for(trait in traits){
-list.trait <- DownloadData(trait)
+list.trait <- DownloadData(trait,sub)
 
 list.models <- list()
 
@@ -285,7 +333,11 @@ for(i in names(list.trait)[-1]){
                                thin=n_thin)
 }
 
-saveRDS(list.models,file=paste0("outputs/models/",trait,".rds"))
+if(sub=="sub1"){
+saveRDS(list.models,file=paste0("outputs/models/",trait,"_sub1.rds"))} else if (sub=="sub2"){
+saveRDS(list.models,file=paste0("outputs/models/",trait,"_sub2.rds"))} else {
+saveRDS(list.models,file=paste0("outputs/models/",trait,".rds"))}
+
 
 }
 ```
@@ -293,9 +345,10 @@ saveRDS(list.models,file=paste0("outputs/models/",trait,".rds"))
 We use the `loo` package to compare the models based on the [ELPD](http://mc-stan.org/loo/reference/loo-glossary.html).
 
 ```{r Loo,eval=F}
+if(sub=="no"){ # we only ran this analysis for the unfiltered dataset
 loos <- mclapply(list.models,loo)
 loocompare <- loo_compare(x=loos)
-saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))
+saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))}
 ```
 
 # Posterior distributions
@@ -305,6 +358,7 @@ saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))
 ### One graph per trait
 
 ```{r BetaXTraitSpecificFigure,eval=F}
+if(sub=="no"){
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
@@ -343,14 +397,16 @@ p <- ggplot(d,aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=X
 
 ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_BetaX.png"),height=8,width=12)
 
-})
+})}
 ```
 
 ### Main figure of the paper (Figure 2) (5 drivers)
 
 
 ```{r}
-traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 subdrivers <- c("A","EH1[20km]","EH2[20km]","SHM","invEMT")
 param <- "betaX"
@@ -386,6 +442,36 @@ df.betaX$Xp <- factor(df.betaX$Xp,levels=rev(levels(df.betaX$Xp)))
 
 d13c <- parse(text = TeX("$\\delta^{13}C$"))
 
+if(sub=="sub2"){
+  p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst")), # 
+                     values=rev(c("#B2182B","#D73027", "#FDAE61","#5AAE61","#A6DBA0"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst")),
+                     values = c(17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.342, .13),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=2))
+} else {
 p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
@@ -404,9 +490,7 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
                                 "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)),
+                                "Mean duration of bud burst")),
                      values = c(15, 15,17, 17,16,16,16,16)) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
@@ -420,8 +504,13 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
       panel.grid.minor.x=element_blank(),
       panel.grid.major.x=element_blank()) +
     guides(color=guide_legend(ncol=2))
+}
 
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig.png",height=8,width=10)
+if(sub=="sub1"){
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig_sub1.png",height=8,width=10)} else if (sub=="sub2"){
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig_sub2.png",height=8,width=10)} else {
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig.png",height=8,width=10)  
+  }
 ```
 
 
@@ -429,7 +518,10 @@ ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig.png",height
 
 
 ```{r AllTraits}
-traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+if(sub=="sub2"){traits <- c("BDX_htnov18","BDX_htnov13","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
+
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 param <- "betaX"
 
@@ -463,6 +555,37 @@ df.betaX$Xp <- factor(df.betaX$Xp,levels=rev(levels(df.betaX$Xp)))
 
 d13c <- parse(text = TeX("$\\delta^{13}C$"))
 
+if(sub=="sub2"){
+p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst")), # 
+                     values=rev(c("#B2182B","#D73027", "#FDAE61","#5AAE61","#A6DBA0"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst")),
+                     values = c(17, 17,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.27, .13),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank())
+
+} else {
+  
 p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
@@ -496,14 +619,21 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
       strip.text.x = element_text(size = 14),
       panel.grid.minor.x=element_blank(),
       panel.grid.major.x=element_blank()) +
-    guides(color=guide_legend(ncol=2))
+    guides(color=guide_legend(ncol=2))}
+
 p
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX.png",height=8,width=12)
+
+if(sub=="sub1"){
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_PaperFig_sub1.png",height=8,width=12)} else if (sub=="sub2"){
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_PaperFig_sub2.png",height=8,width=10)} else {
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_PaperFig.png",height=8,width=12)  
+  }
 ```
 
 ### Other visualizations I tried
 
 ```{r BetaXAllTraitsFigure}
+sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","AST_htnov12","BDX_htnov13","BDX_htnov18","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
 param <- "betaX"
@@ -713,6 +843,7 @@ p
 ## $\sigma^{2}_{C_{p}}$
 
 ```{r SigmaClon}
+sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
 
@@ -761,13 +892,14 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon.png"),height=6
 
 ```
 
-## Heritabilities
+## Broad-sense heritabilities
 
-We calculated population-specific heritabilities, such as:
+We calculated population-specific broad-sense heritabilities, such as:
 
 $$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
 
 ```{r H2Figures}
+sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
 
@@ -817,6 +949,8 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_h2prov.png"),height=6,wi
 ```
 
 ```{r H2pheno}
+sub="no" # this part was only one on the unfiltered dataset
+
 # For the discussion, I calculated the heritability values of the phenology-related traits:
 h2pheno <- mclapply(c("MeanBB","MeanDBB"),function(x){
   tab <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
@@ -840,6 +974,8 @@ h2pheno <- mclapply(c("MeanBB","MeanDBB"),function(x){
 
 
 ```{r VartPartFigs}
+sub="no" # this part was only one on the unfiltered dataset
+
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
 
@@ -882,6 +1018,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_VarPart.png"),height=6,w
 
 
 ```{r VarPartAllHeights}
+sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12")
 drivers <- c("A","EH1[20km]","EH2[20km]","SHM","invEMT") 
 
@@ -1016,6 +1153,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),heigh
 
 
 ```{r RsquaredPosteriors}
+sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
 param <- "R_squared"
@@ -1079,6 +1217,7 @@ ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Rsquared.png",height=7,wid
 # Correlation btw the number of clones per pop and $\sigma^{2}_{C_{p}}$
 
 ```{r CorrealtionNumberClones}
+sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
 provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
@@ -1164,6 +1303,8 @@ df %>% kable(digits=3,"latex")
 # Climatic transfer distances
 
 ```{r FunctionDownloadDataCTD}
+sub="no" # this part was only one on the unfiltered dataset
+
 DownloadDataCTD <- function(trait){
 
 if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
@@ -1233,6 +1374,8 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
 ```
 
 ```{r RunningModelsCTD}
+sub="no" # this part was only one on the unfiltered dataset
+
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
 CTDbetaX <- lapply(traits, function(trait) {
@@ -1268,6 +1411,8 @@ saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 
 
 ```{r FigureCTD, eval=T, fig.height=9,fig.width=9}
+sub="no" # this part was only one on the unfiltered dataset
+
 CTDbetaX <- readRDS(file=paste0("outputs/models/CTDbetaX.rds"))
 
 traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
@@ -1506,8 +1651,8 @@ GenDivbetaX <-
   GenDivbetaX %>% 
   bind_rows(.id="Traits")
 
-GenDivbetaX $Traits <- as.factor(GenDivbetaX $Traits)
-GenDivbetaX $Traits <- factor(GenDivbetaX $Traits,levels=rev(c(traits)))
+GenDivbetaX$Traits <- as.factor(GenDivbetaX$Traits)
+GenDivbetaX$Traits <- factor(GenDivbetaX$Traits,levels=rev(c(traits)))
 
 d13c <- parse(text = TeX("$\\delta^{13}C$"))
 
@@ -1547,6 +1692,509 @@ p
 
 ggsave(p,file="figs/PosteriorDistributions/GeneticDiversity_betaX.png",height=9,width=13)
 ```
+
+# Isolation-by-distance
+
+Following the comments of referee #1 (first round of review in Heredity), we calculate an index to quantify (or at least try to capture) the geographic isolation of the populations within the species range. 
+For that, we use the distribution of maritime pine based on both the Euforgen distribution and the NFI plots of Spain and France. We define the center of the distribution as the point at mid-distance of the most extreme latitudes and longitudes where the presence of maritime pine has been observed. 
+Here are some maps showing maritime pine distribution, the population location and the center of the distribution.
+
+```{r MappingCenterDistributionIBD}
+library(raster)
+library(rnaturalearth)
+library(ggthemes)
+library(sf)
+
+
+# We extract the population coordinates
+prov.coord <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::select(prov, longitude_prov,latitude_prov) %>% 
+  distinct() %>% 
+  dplyr::filter(!prov=="MAD") %>% 
+  dplyr::rename(longitude=longitude_prov,latitude=latitude_prov)
+
+
+PinpinDistri  <- shapefile('../../GenomicOffset/GenomicOffsetPinPin/data/maps/MaskPinpinDistri/PinpinDistriEUforgen_NFIplotsBuffer10km.shp')
+center.distri.long <- mean(c(extent(PinpinDistri)@xmin,extent(PinpinDistri)@xmax))
+center.distri.lat <- mean(c(extent(PinpinDistri)@ymin,extent(PinpinDistri)@ymax))
+center.distri <- c(center.distri.long,center.distri.lat)
+
+
+# Maps with the raster package
+##############################
+
+# Create spatial objects for plotting
+prov.coord.spatial <- SpatialPoints(prov.coord[,c("longitude","latitude")], 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+center.distri.spatial <- SpatialPoints(data.frame(longitude=center.distri.long,latitude=center.distri.lat), 
+                        proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+plot(PinpinDistri,col="cadetblue1", lwd=0.1)
+plot(prov.coord.spatial,add=T,pch=17,col="darkblue")
+plot(center.distri.spatial,add=T,pch=4,col="red",lwd=4)
+
+
+# Maps with the sf and ggplot packages
+######################################
+
+# This map is included in the Supplementary Information and the response to the reviewers.
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+PinpinDistri <- st_read('../../GenomicOffset/GenomicOffsetPinPin/data/maps/MaskPinpinDistri/PinpinDistriEUforgen_NFIplotsBuffer10km.shp')
+mapIBD <- ggplot(PinpinDistri) +
+  geom_sf(color=alpha("chartreuse4",0.6),size=0.2,fill=alpha("chartreuse4",0.3)) + 
+  theme_bw() +
+  geom_sf(data = world,color=alpha("gray",0.8),size=0.2,fill=alpha("gray",0.1)) +
+    coord_sf(xlim = c(-10, 13), 
+             ylim = c(32,50.5),
+             crs = "+proj=longlat +datum=WGS84") +
+  geom_point(data=prov.coord[,c("longitude","latitude")],aes(x=longitude,y=latitude),size=2,pch=17) +
+  geom_point(data=data.frame(longitude=center.distri.long,latitude=center.distri.lat),aes(x=longitude,y=latitude),size=6,pch=8,col="red") +
+  xlab("Longitude") + ylab("Latitude")
+
+ggsave(mapIBD,file="maps/mapIBD.png",height=8,width=10)
+```
+
+We then calculate the distance (in meters) between each population location and the center of the distribution. With the `geosphere` package.
+
+```{r FormatDataIBD}
+# calculate the distance to the point with the package geosphere
+library(geosphere)
+drivers <- prov.coord %>% 
+  dplyr::mutate(dist.center.pt = distGeo(center.distri, prov.coord[,c("longitude","latitude")])) %>% 
+  dplyr::mutate(dist.center.pt.scaled = as.numeric(scale(dist.center.pt)))
+
+FormatIBD <- function(trait){
+
+if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
+    CenterResponseVariable <- TRUE
+    LogResponseVariable <- FALSE
+    
+  }  else if(trait=="POR_SLA"){
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- TRUE
+  } else {
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- FALSE
+  }
+  
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::mutate(trait = rowMeans(dplyr::select(.,contains("BDX")),na.rm=T)) %>%
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov") 
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov")
+  
+  }
+  
+  
+  list.stan <- list(N=length(df$tree),
+         y=df$trait,
+         X=unique(df$dist.center.pt.scaled),
+         nprov = length(unique(df$prov)),
+         nclon = length(unique(df$clon)),
+         nblock = length(unique(df$block)),
+         prov = as.numeric(as.factor(df$prov)),
+         which_prov = as.numeric(as.factor(pull(unique(df[c("prov","clon")])[,"prov"]))),
+         clon = as.numeric(as.factor(df$clon)),
+         bloc = as.numeric(as.factor(df$block)))
+  
+  return(list.stan)
+}
+```
+
+We run one model per trait (so eight models) and we extract the $\beta_X$ coefficients standing for the association between the total genetic variances and the distance between each population and the center of the species distribution.
+
+```{r RunModelsIBD}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+IBDbetaX <- lapply(traits, function(trait) {
+  
+  list.stan <- FormatIBD(trait)
+  
+  mod <- sampling(model, 
+                  data = list.stan, 
+                  pars=c("betaX"),
+                  iter = n_iter, 
+                  chains = n_chains, 
+                  cores = n_chains,
+                  save_warmup = save_warmup,
+                  thin=n_thin)
+  
+  broom::tidyMCMC(mod,pars=(c("betaX")),
+                  droppars = NULL, estimate.method = "median", ess = T, rhat = T, conf.int = T,conf.level = 0.95) 
+    
+  }) %>% 
+  bind_rows() %>% 
+  dplyr::mutate(Traits=traits)
+  
+
+saveRDS(IBDbetaX,file=paste0("outputs/models/IBDbetaX.rds"))
+```
+
+We build the figure included in the Supplementary Information with the $\beta_X$ coefficients.
+
+```{r BetaXIBD, eval=T, fig.height=9,fig.width=13}
+IBDbetaX <- readRDS(file=paste0("outputs/models/IBDbetaX.rds"))
+
+traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+
+IBDbetaX$Traits <- as.factor(IBDbetaX$Traits)
+IBDbetaX$Traits <- factor(IBDbetaX$Traits,levels=rev(c(traits)))
+
+d13c <- parse(text = TeX("$\\delta^{13}C$"))
+
+p <- IBDbetaX  %>%   ggplot(aes(x=term,y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), # 
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      axis.ticks.x = element_blank(),
+      legend.background = element_rect(colour = "grey"),
+      legend.position = c(.85, .15),
+      strip.text.x = element_blank(),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
+
+p
+
+ggsave(p,file="figs/PosteriorDistributions/IBD_betaX.png",height=9,width=10)
+```
+
+# Experimental design 
+
+```{r ExpDesign}
+sub="no" # this part was only one on the unfiltered dataset
+
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+list.df.traits <- lapply(traits, function(x){
+  list.trait <- DownloadData(x,sub=sub)
+  return(list.trait$df %>% mutate(trait.id=x))})
+
+
+lapply(list.df.traits, function(x){
+  
+# Minimum, maximum and average number of trees per clone in each population
+df <- x %>% 
+    dplyr::select(prov,clon) %>% 
+    group_by(clon) %>% 
+    mutate(NbInd = n()) %>% 
+    distinct() %>% 
+    group_by(prov) %>% 
+    mutate(MinNbTreesPerClone=min(NbInd),MaxNbTreesPerClone=max(NbInd),MeanNbTreesPerClone=mean(NbInd)) %>% 
+    dplyr::select(-clon,-NbInd) %>% 
+    distinct() 
+
+# Number of trees in each population
+df <- x %>% 
+    group_by(prov) %>% 
+    summarise(NbTrees=n()) %>% 
+    merge(df,by="prov")
+  
+# Number of clones in each population  
+df <- x %>% 
+    dplyr::select(prov,clon) %>% 
+    distinct() %>% 
+    group_by(prov) %>%  
+    summarise(NbClones=n()) %>% 
+    merge(df,by="prov")
+  
+# Export in a latex table for the Supplementary Information
+df <- df %>% dplyr::rename(Population=prov) 
+
+# print(xtable(df, type = "latex",digits=1), 
+#       file = paste0("tables/ExperimentalDesign/",unique(x$trait.id),".tex"),
+#       include.rownames=FALSE)
+  })
+```
+
+# Model with G*E
+
+## Model equation and code
+
+This model is based on the previous one (so I do not re-explain the meaning of each parameters, except for the new ones). 
+
+We model each trait $y_{bpcrs}$ such as:
+
+\begin{equation}
+\begin{aligned}
+y_{bpcr} & \sim  \mathcal{N}(\mu_{bpc},\sigma^{2}_{r})\\[3pt]
+\mu_{bpc} & =  \beta_{0} +  B_{b} + P_{p} + C_{c(p)} + S_{s} +  S_{s}*C_{c(p)}\\[3pt]
+\beta_{0} & \sim \mathcal{N}(\mu_{y},2)\\[3pt]
+\begin{bmatrix} B_{b} \\ P_{p} \\ S_{s} \\ S_{s}*C_{c(p)} \end{bmatrix} 
+    & \sim \mathcal{N}\left(0,
+\begin{bmatrix}\sigma^{2}_{B}\\[3pt]
+\sigma^{2}_{P}\\[3pt]
+\sigma^{2}_{S}\\[3pt]
+\sigma^{2}_{S*C}\\[3pt]
+\end{bmatrix}
+\right)\\[3pt]
+C_{c(p)} & \sim \mathcal{N}(0,\sigma^{2}_{C_{p}})
+\end{aligned}
+\end{equation}
+
+where $S_{s}$ are the site intercepts, $\sigma^{2}_{S}$ is the variance among sites and $\sigma^{2}_{S*C}$ is the variance of the interaction among the sites and clones, that is the G*E variance.
+
+Partitionning of the total variance $\sigma_{tot}^{2}$:
+
+\begin{equation}
+\begin{aligned}
+\sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \overline{\sigma_{C_{p}}^{2}} + \sigma_{P}^{2} + \sigma_{S}^{2} + \sigma_{S*C}^{2}\\[3pt]
+\sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{r})\\[3pt]
+\sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{B})\\[3pt]
+\sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{P})\\[3pt]
+\overline{\sigma_{C_{p}}} & = \sigma_{tot} \times \sqrt(\pi_{C})\\[3pt]
+\sigma_{S} & = \sigma_{tot} \times \sqrt(\pi_{S})\\[3pt]
+\sigma_{S*C} & = \sigma_{tot} \times \sqrt(\pi_{S*C})\\[3pt]
+\sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
+\end{aligned}
+\end{equation}
+
+with $\sum_{l}^{6}\pi_{l}=1$.
+
+The expression of $\sigma_{C_{p}}$ (and its associated priors) is the same than the main model of the paper (which is trait-specific).
+
+Here is the stan model code:
+
+```{r ModelGECompilation}
+model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate_3Sites.stan")
+model
+```
+
+## Running the GE model
+
+```{r FormatDataForGEModel}
+# The three height measurements we used:
+traits <- c("POR_htoct12","BDX_htnov13","AST_htnov12")
+
+# Height is not transformed
+CenterResponseVariable <- FALSE
+LogResponseVariable <- FALSE
+
+
+# Downloading and scaling (mean-centering) the potential drivers
+drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
+    dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+    dplyr::mutate(across(-prov,scale)) %>% 
+    dplyr::mutate(across(-prov,as.numeric))
+
+  
+# Merging with the phenotypic data
+df <- lapply(traits, function(trait){
+   readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,site,trait) %>% 
+    dplyr::mutate(site_clon=paste0(site,"_",clon)) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree) %>% 
+    inner_join(drivers,by="prov")
+}) %>% bind_rows()
+
+
+list.stan <- lapply(colnames(drivers %>% dplyr::select(-prov)), function(x) {
+    list(N=length(df$tree),
+         y=df$trait,
+         X=as.numeric(pull(unique(df[,c(x,"prov")]) %>% dplyr::select(contains(x)))),
+         nprov = length(unique(df$prov)),
+         nclon = length(unique(df$clon)),
+         nblock = length(unique(df$block)),
+         nsite = length(unique(df$site)),
+         prov = as.numeric(as.factor(df$prov)),
+         which_prov = as.numeric(as.factor(pull(unique(df[c("prov","clon")])[,"prov"]))),
+         clon = as.numeric(as.factor(df$clon)),
+         bloc = as.numeric(as.factor(df$block)),
+         site = as.numeric(as.factor(df$site)),
+         site_clon = as.numeric(as.factor(df$site_clon)))})
+  
+names(list.stan) <- colnames(drivers %>% dplyr::select(-prov))
+```
+
+
+```{r RunGEModel}
+list.models <- list()
+
+for(i in names(list.stan)){
+  
+list.models[[i]] <- sampling(model, 
+                               data = list.stan[[i]], 
+                               pars=c("betaX", "pi", "R_squared", "h2_prov"), # we keep only the parameters of interest to save space
+                               iter = n_iter, 
+                               chains = n_chains, 
+                               cores = n_chains,
+                               save_warmup = save_warmup,
+                               thin=n_thin)}
+
+saveRDS(list.models,file=paste0("outputs/models/HeightGE.rds"))
+```
+
+
+## Figures of post. distributions
+
+### $\beta_{X}$
+```{r BetaXGEModel, eval=T,fig.height=8,fig.width=12}
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
+
+d <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=("betaX"),
+              droppars = NULL, 
+              estimate.method = point.est, 
+              ess = F, 
+              rhat = F, 
+              conf.int = T,
+              conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Xp=drivers)
+  
+d$Xp <- as.factor(d$Xp)
+d$Xp <- factor(d$Xp,levels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM"))
+
+
+p <- ggplot(d,aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf.high,color=Xp)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=5,size=5) +
+  ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
+  scale_x_discrete(labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" )) +
+  theme_bw() +
+  theme(axis.text = element_text(size=16),
+        axis.title = element_text(size=16),
+        legend.position = "none")
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/HeightGE_BetaX.png"),height=8,width=12)
+p
+```
+
+### Broad-sense heritabilities
+
+```{r H2GEModel, eval=T,fig.height=6,fig.width=22}
+provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  arrange(by=tree) %>% 
+  distinct(prov) %>% 
+  pull()
+
+legend.position <- c(.15, .86)
+  
+p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("h2_prov"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(prov=rep(provs,8)) %>% 
+  ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221" ,
+                              "#DE77AE","#C51B7D" ,
+                              "#B2ABD2", "#542788" , #"#2D004B","#8073AC" ,
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("Populations") +
+  ylab(TeX("$\\H^{2}_{p}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = legend.position,
+        legend.background = element_rect(colour = "grey"),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=4))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/HeightGE_h2prov.png"),height=6,width=22)
+p
+```
+
+
+### Variance partitioning
+
+```{r VartPartGEModel, eval=T, fig.height=6,fig.width=18}
+p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>% 
+  mclapply(function(x) {
+    broom::tidyMCMC(x,pars=("pi"),
+                droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
+  bind_rows(.id="Drivers") %>% 
+  mutate(prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon","sigma_site","sigma_GE"),8),
+         prop.var=factor(prop.var, levels=c("sigma_prov","mean_sigma_clon","sigma_GE","sigma_site","sigma_block","sigma_r"))) %>%
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
+  scale_color_manual(values=c("#7FBC41", "#4D9221",
+                              "#DE77AE","#C51B7D",
+                              "#B2ABD2", "#542788",
+                              "#E08214" ,"#FDB863" ),
+                     labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
+  xlab("") +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Populations",
+                            "Clones",
+                            "Sites*Clones",
+                            "Sites",
+                            "Blocks",
+                            "Residuals"
+                            )) +
+  theme(legend.position = c(.135, .81),
+        legend.background = element_rect(colour = "grey"),
+        axis.text = element_text(size=25),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=2))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/HeightGE_VarPart.png"),height=6,width=18)
+p
+```
+
 
 
 # Bibliography
