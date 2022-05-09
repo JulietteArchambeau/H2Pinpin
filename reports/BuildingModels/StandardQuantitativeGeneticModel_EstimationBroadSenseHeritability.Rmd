@@ -1,0 +1,405 @@
+---
+title: "Broad-sense heritability of each trait"
+author: "Juliette Archambeau"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    # code_fold: hide
+    toc: true
+    toc_depth: 4
+    toc_float:
+       collapsed: false
+    number_sections: true
+    highlight: textmate
+editor_options: 
+  chunk_output_type: console
+---
+
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+<style type="text/css">
+div.main-container {
+  max-width: 2000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 600px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 5,fig.height = 4,cache=F)
+options(width = 300)
+library(knitr)        # CRAN v1.26
+library(reshape2)     # CRAN v1.4.4
+library(dplyr)        # CRAN v1.0.0
+library(tidyverse)    # CRAN v1.3.0
+library(kableExtra)   # CRAN v1.1.0
+library(rstan)        # CRAN v2.19.2
+library(broom)        # CRAN v0.5.2
+library(loo)          # CRAN v2.2.0
+library(latex2exp)    # CRAN v0.4.0
+library(parallel)
+library(tidytidbits)  # CRAN v0.2.3
+library(tidybayes)    # CRAN v2.0.1
+library(bayesplot)    # CRAN v1.7.1
+library(cowplot)      # CRAN v1.0.0
+library(xtable)
+theme_set(theme_bw(base_size = 20))
+color_scheme_set("green")
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+```
+
+
+```{r OptionDocs}
+# Options for sampling
+n_chains <- 4
+n_iter <- 2500
+n_warm <- 1250
+n_thin <- 1
+save_warmup = FALSE 
+
+theme_set(theme_bw(base_size = 20))
+
+# option for the MCMC intervals
+point.est="median"
+
+conf.level <- 0.95
+```
+
+# Model equation and code
+
+In this document, we estimate the broad-sense heritability of each trait $y_{bpcr}$ based on the following quantitative genetic model:
+
+\begin{equation}
+\begin{aligned}
+y_{bpcr} & \sim  \mathcal{N}(\mu_{bpc},\sigma^{2}_{r})\\[3pt]
+\mu_{bpc} & =  \beta_{0} +  B_{b} + P_{p} + C_{c(p)}\\[3pt]
+\end{aligned}
+\end{equation}
+
+where $\beta_{0}$ is the global intercept, $B_{b}$ the block intercepts, $P_{p}$ the population intercepts, $C_{c(p)}$ the clone intercepts and $\sigma^{2}_{r}$ the residual variance.
+
+The prior of $\beta_{0}$ was weakly informative and centered around the mean of the observed values for the trait under considered, as follows:
+
+$$\beta_{0} \sim \mathcal{N}(\mu_{y},2)$$
+
+The population, clone and block intercepts, $P_{p}$, $C_{c(p)}$ and $B_{b}$ were considered normally-distributed with variances $\sigma^{2}_{P}$, $\sigma^{2}_{C}$ and $\sigma^{2}_{B}$, such as:
+
+$$\begin{bmatrix} B_{b} \\ P_{p}\\ C_{c(p)} \end{bmatrix} 
+    \sim \mathcal{N}\left(0,
+\begin{bmatrix}\sigma^{2}_{B}\\[3pt]
+\sigma^{2}_{P}\\
+\sigma^{2}_{C}\\
+\end{bmatrix}
+\right)\\[3pt]$$
+
+
+To partition the total variance, we parameterize our model so that only the total variance, $\sigma_{tot}^{2}$ has a prior, such that:
+
+\begin{equation}
+\begin{aligned}
+\sigma_{tot}^{2} & = \sigma_{r}^{2} + \sigma_{B}^{2} + \sigma_{C}^{2} + \sigma_{P}^{2}\\[3pt]
+\sigma_{r} & = \sigma_{tot} \times \sqrt(\pi_{r})\\[3pt]
+\sigma_{B} & = \sigma_{tot} \times \sqrt(\pi_{B})\\[3pt]
+\sigma_{P} & = \sigma_{tot} \times \sqrt(\pi_{P})\\[3pt]
+\sigma_{C} & = \sigma_{tot} \times \sqrt(\pi_{C})\\[3pt]
+\sigma_{tot} & \sim \mathcal{S}^{*}(0,1,3)
+\end{aligned}
+\end{equation}
+
+where $\sum_{l}^{4}\pi_{l}=1$ (using the `simplex` function in `Stan`).
+
+Here is the stan model code:
+
+```{r ModelCompilation}
+model = stan_model("scripts/StanModels/HierarchicalModel_StandardQuantitativeGeneticModel.stan")
+model
+```
+
+
+# Running and saving the models
+
+> Function to download and format the data
+
+```{r FunctionDownloadFormatData,eval=F}
+DownloadData <- function(trait,sub){
+
+#### Trait transformations
+    # Phenology-realted traits and delta13C are centered to help convergence
+if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
+    CenterResponseVariable <- TRUE
+    LogResponseVariable <- FALSE
+    
+    # SLA is not centered and we used its logarithm as response variable
+  }  else if(trait=="POR_SLA"){ 
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- TRUE
+    
+    # Height is not transformed
+  } else { 
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- FALSE
+  }
+
+
+#### Merging with the phenotypic data
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+      
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::mutate(trait = rowMeans(select(.,contains("BDX")),na.rm=T)) %>%
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree)
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
+    execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
+    arrange(by=tree)
+  
+  }
+  
+  
+########################################################################################################################
+# Option to keep only populations represented by at least 4 clones & clones represented by at least 4 individuals.
+  if(sub=="sub1"|sub=="sub2"){
+
+  ClonesToKeep <- df %>% 
+    dplyr::select(prov,clon) %>% 
+    group_by(clon) %>% 
+    mutate(NbInd = n()) %>% 
+    distinct() %>%
+    filter(NbInd>sub.ind)
+  
+  df <- df %>% semi_join(ClonesToKeep, by="clon") 
+  
+  PopsToKeep <- df %>%  
+    dplyr::select(prov,clon) %>% 
+    distinct() %>%  
+    group_by(prov) %>%  
+    dplyr::summarise(NbClones=n()) %>% 
+    filter(NbClones>sub.clones)
+  
+  df <- df %>% semi_join(PopsToKeep, by="prov") 
+  }
+########################################################################################################################
+    
+
+# the list for stan:
+
+  list.stan <- list(N=length(df$tree),
+         y=df$trait,
+         nprov = length(unique(df$prov)),
+         nclon = length(unique(df$clon)),
+         nblock = length(unique(df$block)),
+         prov = as.numeric(as.factor(df$prov)),
+         clon = as.numeric(as.factor(df$clon)),
+         bloc = as.numeric(as.factor(df$block)))
+  
+}
+```
+
+```{r RunModel,eval=F}
+########################################
+# Running the models on a filtered dataset or not? (modification after the first round of review in Heredity)
+sub = "no" # if the dataset is not filtered.
+
+### Two filtered datasets:
+
+# Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
+sub = "sub1"
+sub.clones = 3
+sub.ind = 3
+
+# Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
+sub = "sub2"
+sub.clones = 10
+sub.ind = 6
+########################################
+
+if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
+
+list.models <- list()
+
+
+for(trait in traits){
+  
+list.trait <- DownloadData(trait,sub)
+
+
+list.models[[trait]] <- sampling(model, 
+                               data = list.trait, 
+                               pars=c("beta0",
+                                      "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
+                                      "H2",
+                                      "sigma_tot","sigma_block","sigma_prov","sigma_clon",
+                                      "R_squared"),
+                               iter = n_iter, 
+                               chains = n_chains, 
+                               cores = n_chains,
+                               save_warmup = save_warmup,
+                               thin=n_thin,
+                               control=list(max_treedepth=12))
+}
+
+if(sub=="sub1"){
+saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel_sub1.rds"))} else if (sub=="sub2"){
+saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel_sub2.rds"))} else {
+saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel.rds"))}
+}
+```
+
+
+```{r StandardQuantGenModelH2,fig.height=6,fig.width=8}
+sub="no"
+# I only made the script for sub="no"
+if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
+post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=("H2"),
+              droppars = NULL, 
+              estimate.method = point.est, 
+              ess = F, 
+              rhat = F, 
+              conf.int = T,
+              conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Traits=traits)
+
+# Table for the Supplementary Information:
+post %>% dplyr::select(Traits,estimate,conf.low,conf.high) %>% kable(digits=3,"latex")
+
+traits.order.fig <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+post$Traits <- as.factor(post$Traits)
+post$Traits <- factor(post$Traits,levels=rev(c(traits.order.fig)))
+
+d13c <- parse(text = TeX("$\\delta^{13}C$"))
+
+p <- post  %>%   ggplot(aes(x=term,y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
+  ylab(TeX("$H^{2}$ estimates")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), #
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      axis.ticks.x = element_blank(),
+      legend.background = element_rect(colour = "grey"),
+      legend.position = c(.18, .77),
+      strip.text.x = element_blank(),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
+
+p
+
+ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_BroadSenseHeritability.png",height=6,width=8)
+```
+
+```{r StandardQuantGenModelPI,fig.height=8,fig.width=12}
+post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=("pi"),
+              droppars = NULL, 
+              estimate.method = point.est, 
+              ess = F, 
+              rhat = F, 
+              conf.int = T,
+              conf.level = conf.level) %>% dplyr::mutate(pi=c("Residuals","Blocks","Populations","Clones"))) %>% 
+  bind_rows() %>% 
+  mutate(Traits=sapply(traits,function(x) rep(x,4),simplify = T) %>% as.vector())
+
+traits.order.fig <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+post$Traits <- as.factor(post$Traits)
+post$Traits <- factor(post$Traits,levels=rev(c(traits.order.fig)))
+
+d13c <- parse(text = TeX("$\\delta^{13}C$"))
+
+p <- post  %>%   ggplot(aes(x = pi, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
+  ylab(TeX("Proportion of variance explained")) + xlab("") +
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), # 
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.position = c(0.22,0.88),
+      legend.text=element_text(size=10),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=2,override.aes = list(size=2)))
+p
+
+ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_VariancePartitioning.png",height=8,width=12)
+```
+
