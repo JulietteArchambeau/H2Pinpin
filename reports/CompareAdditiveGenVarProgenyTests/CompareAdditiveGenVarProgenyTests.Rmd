@@ -266,7 +266,11 @@ $$\begin{bmatrix} B_{b} \\ P_{p} \end{bmatrix}
 The family intercepts $F_{f(p)}$ were considered to follow some population-specific normal distributions, such as:
 $$F_{f(p)} \sim \mathcal{N}(0,\sigma^{2}_{F_{p}})$$
 
-where $\sigma^{2}_{F_{p}}$ are the population-specific variances among families.
+where $\sigma^{2}_{F_{p}}$ are the population-specific variances among families and are equal to:
+
+$$\sigma^{2}_{F_{p}} = \frac{1}{4} \sigma^{2}_{A_{p}} $$
+
+where $\sigma^{2}_{A_{p}}$ are the population-specific additive genetic variances.
 
 
 To partition the total variance, we parameterize our model so that only the total variance, $\sigma_{tot}^{2}$ has a prior, such that:
@@ -285,11 +289,11 @@ To partition the total variance, we parameterize our model so that only the tota
 where $\overline{\sigma_{F_{p}}}$ and $\overline{\sigma_{F_{p}}^{2}}$ are the mean of the population-specific among-families standard deviations ($\sigma_{F_{p}}$) and variances ($\sigma^{2}_{F_{p}}$), respectively, and $\sum_{l}^{4}\pi_{l}=1$ (using the `simplex` function in `Stan`).
 
 
-The population-specific among-families standard deviations $\sigma_{F_{p}}$ follow a log-normal distribution with mean $\overline{\sigma_{F_{p}}}$ and variance $\sigma^{2}_{K}$, such as: 
+The population-specific additive genetic standard deviations $\sigma_{A_{p}}$ follow a log-normal distribution with mean $2\overline{\sigma_{F_{p}}}$ and standard deviation $\sigma_{K}$, such as: 
 
 \begin{equation}
 \begin{aligned}
-\sigma_{F_{p}} & \sim \mathcal{LN}\left(\ln(\overline{\sigma_{F_{p}}})-\frac{\sigma^{2}_{K}}{2} + \beta_{X}X_{p},\sigma^{2}_{K}\right)\\[3pt]
+\sigma_{A_{p}} & \sim \mathcal{LN}\left(\ln(2\overline{\sigma_{F_{p}}})-\frac{\sigma^{2}_{K}}{2} + \beta_{X}X_{p},\sigma^{2}_{K}\right)\\[3pt]
 \sigma_{K} & \sim \exp(1)\\[3pt]
 \end{aligned}
 \end{equation}
@@ -297,7 +301,7 @@ The population-specific among-families standard deviations $\sigma_{F_{p}}$ foll
 with $X_{p}$ the potential driver considered and $\beta_{x}$ its associated coefficient.
 
 ```{r ModelCompilation,eval=T}
-model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
+model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_ProgenyTestAsturias.stan")
 model
 ```
 
@@ -321,11 +325,11 @@ list.stan <- lapply(colnames(df)[2:9], function(x)    {
          y=df$Trait,
          X=df[,c(x,"Prov_code_clonapin")] %>% distinct() %>% pull(x) %>% as.numeric(),
          nprov = length(unique(df$Prov_code_clonapin)),
-         nclon = length(unique(df$Family.id)),
+         nfam = length(unique(df$Family.id)),
          nblock = length(unique(df$Block)),
          prov = as.numeric(as.factor(df$Prov_code_clonapin)),
          which_prov = as.numeric(as.factor(pull(unique(df[c("Prov_code_clonapin","Family.id")])[,"Prov_code_clonapin"]))),
-         clon = as.numeric(as.factor(df$Family.id)),
+         fam = as.numeric(as.factor(df$Family.id)),
          bloc = as.numeric(as.factor(df$Block)))})
   
 names(list.stan) <- colnames(df)[2:9]
@@ -339,10 +343,11 @@ for(i in names(list.stan)){
   list.models[[i]] <- sampling(model, 
                                data = list.stan[[i]], 
                                pars=c("beta0","betaX",
-                                      "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
+                                      "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_fam",
                                       "h2_prov",
                                       "sigma_tot","sigma_block","sigma_prov",
-                                      "mean_sigma_clon","sigma_clon","sigma_K"#,
+                                      "mean_sigma_fam","sigma_fam","sigma_K",
+                                      "sigma_A","sigma2_A"#,
                                       #"alpha_clon","alpha_prov",#"alpha_block",
                                       # "y_rep" not included not to have a too heavy file
                                       #"R_squared","log_lik"
@@ -546,9 +551,9 @@ ggsave(p, file="figs/PosteriorDistributions/ValidationStep_AllDrivers_BetaX_Pape
 ```
 
 
-## $\sigma^{2}_{C_{p}}$
+## Additive genetic variances $\sigma^{2}_{A_{p}}$
 
-```{r SigmaClon,eval=F}
+```{r SigmaA,eval=F}
 traits <- c("HT07","HT10")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 
@@ -560,7 +565,7 @@ legend.position <- c(.15, .86)
   
 p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>% 
   mclapply(function(x) {
-    broom::tidyMCMC(x,pars=("sigma2_clon"),
+    broom::tidyMCMC(x,pars=("sigma2_A"),
                 droppars = NULL, 
                 estimate.method = point.est, 
                 ess = F, 
@@ -578,7 +583,7 @@ p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>%
                               "#E08214" ,"#FDB863" ),
                      labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
   xlab("Populations") +
-  ylab(TeX("$\\sigma^{2}_{C_{p}}$ estimates")) +
+  ylab(TeX("$\\sigma^{2}_{A_{p}}$ estimates")) +
   labs(color = "Potential drivers") +
   theme(legend.position = legend.position,
         legend.background = element_rect(colour = "grey"),
@@ -586,16 +591,16 @@ p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>%
         panel.grid.major.x=element_blank())  +
     guides(color=guide_legend(ncol=4))
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_SigmaClon.png"),height=6,width=22)
+ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_SigmaA.png"),height=6,width=22)
   
 })
 ```
 
-## Heritabilities
+## Narrow-sense heritabilities $h^2_{p}$
 
-We calculated population-specific heritabilities, such as:
+We calculated population-specific narrow-sense heritabilities, such as:
 
-$$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
+$$ h^2_{p} = \frac{\sigma^{2}_{A_{p}}}{\sigma^{2}_{A_{p}} + \sigma^{2}_r} $$
 
 ```{r H2Figures,eval=F}
 traits <- c("HT07","HT10")
@@ -627,13 +632,13 @@ p <- readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>%
                               "#E08214" ,"#FDB863" ),
                      labels=c("A","D","EH1[1.6km]","EH2[1.6km]","EH1[20km]","EH2[20km]","invEMT","SHM")) +
   xlab("Populations") +
-  ylab(TeX("$\\H^{2}_{p}$ estimates")) +
+  ylab(TeX("$\\h^{2}_{p}$ estimates")) +
   labs(color = "Potential drivers") +
-  theme(legend.position = legend.position,
+  theme(#legend.position = legend.position,
         legend.background = element_rect(colour = "grey"),
         panel.grid.minor.x=element_blank(),
         panel.grid.major.x=element_blank())  +
-    guides(color=guide_legend(ncol=4))
+    guides(color=guide_legend(ncol=1))
 
 ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",x,"_h2prov.png"),height=6,width=22)
   
@@ -655,7 +660,7 @@ mclapply(traits,function(x){
                 droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
   bind_rows(.id="Drivers") %>% 
   mutate(Traits=x,
-         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),8)) %>% 
+         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_fam"),8)) %>% 
   
   ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
   geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
@@ -667,7 +672,7 @@ mclapply(traits,function(x){
   xlab("") +
   ylab("Proportion of variance explained") +
   labs(color = "Potential drivers") +
-  scale_x_discrete(labels=c("Clones",
+  scale_x_discrete(labels=c("Families",
                             "Blocks",
                             "Populations",
                             "Residuals"
