@@ -405,7 +405,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_BetaX.png"),height=8,wid
 
 ```{r}
 if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
-  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+  traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
 
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")   
 subdrivers <- c("A","EH1[20km]","EH2[20km]","SHM","invEMT")
@@ -483,14 +483,16 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
                                 "Mean bud burst date",
                                 "Mean duration of bud burst",
                                 "Specific Leaf Area",
-                                d13c)), # 
+                                d13c)), #
                      values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
   scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
                                 "Height (Bordeaux, 25 months)",
                                 "Height (Portugal, 20 months)",
                                 "Height (Asturias, 21 months)",
                                 "Mean bud burst date",
-                                "Mean duration of bud burst")),
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
                      values = c(15, 15,17, 17,16,16,16,16)) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
@@ -840,7 +842,7 @@ p
 ```
 
 
-## $\sigma^{2}_{C_{p}}$
+## Total genetic variances $\sigma^{2}_{C_{p}}$
 
 ```{r SigmaClon}
 sub="no" # this part was only one on the unfiltered dataset
@@ -892,11 +894,11 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon.png"),height=6
 
 ```
 
-## Broad-sense heritabilities
+## Broad-sense heritabilities $H^2_{p}$
 
 We calculated population-specific broad-sense heritabilities, such as:
 
-$$ h^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
+$$ H^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
 
 ```{r H2Figures}
 sub="no" # this part was only one on the unfiltered dataset
@@ -936,23 +938,25 @@ p <- readRDS(file=paste0("outputs/models/",x,".rds")) %>%
   xlab("Populations") +
   ylab(TeX("$\\H^{2}_{p}$ estimates")) +
   labs(color = "Potential drivers") +
-  theme(legend.position = legend.position,
+  theme(#legend.position = legend.position,
         legend.background = element_rect(colour = "grey"),
         panel.grid.minor.x=element_blank(),
         panel.grid.major.x=element_blank())  +
-    guides(color=guide_legend(ncol=4))
+    guides(color=guide_legend(ncol=1))
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_h2prov.png"),height=6,width=22)
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_H2prov.png"),height=6,width=22)
   
 })
 
 ```
 
-```{r H2pheno}
+ For the discussion, we calculated the mean heritability values of each trait
+ 
+```{r H2means}
 sub="no" # this part was only one on the unfiltered dataset
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
-# For the discussion, I calculated the heritability values of the phenology-related traits:
-h2pheno <- mclapply(c("MeanBB","MeanDBB"),function(x){
+h2means <- mclapply(traits,function(x){
   tab <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
   mclapply(function(x) {
     broom::tidyMCMC(x,pars=("h2_prov"),
@@ -967,6 +971,9 @@ h2pheno <- mclapply(c("MeanBB","MeanDBB"),function(x){
   
   mean(tab$estimate)
   })
+
+names(h2means) <- traits
+h2means
 ```
 
 
@@ -2123,7 +2130,7 @@ provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds"
   distinct(prov) %>% 
   pull()
 
-legend.position <- c(.15, .86)
+legend.position <- c(.65, .86)
   
 p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>% 
   mclapply(function(x) {
@@ -2152,7 +2159,7 @@ p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>%
         panel.grid.major.x=element_blank())  +
     guides(color=guide_legend(ncol=4))
 
-ggsave(p,file=paste0("figs/PosteriorDistributions/HeightGE_h2prov.png"),height=6,width=22)
+ggsave(p,file=paste0("figs/PosteriorDistributions/HeightGE_H2prov.png"),height=6,width=22)
 p
 ```
 
