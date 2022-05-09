@@ -100,7 +100,7 @@ generated quantities {
   sigma2_r = square(sigma_r);
   sigma2_prov = square(sigma_prov);
   sigma2_clon = square(sigma_clon);
-  h2_prov = sigma2_clon/sigma2_r;
+  for(p in 1:nprov)  h2_prov[p] = sigma2_clon[p]/(sigma2_r+sigma2_clon[p]);
   sigma2_block = square(sigma_block);
   for(i in 1:N)  {
     y_rep[i] = normal_rng(mu[i], sigma_r);
