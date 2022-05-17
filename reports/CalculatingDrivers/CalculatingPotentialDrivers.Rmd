@@ -64,6 +64,7 @@ library(kableExtra) # CRAN v1.1.0
 library(hierfstat)  # CRAN v0.04-22
 library(matrixcalc) # CRAN v1.0-3
 library(latex2exp)  # CRAN v0.4.0
+library(xtable)
 #options(knitr.table.format = "latex")
 ```
 
@@ -1470,6 +1471,18 @@ df %>%
 ```
 
 The mean extreme minimum temperature across populations is `r df$EMT %>% mean() %>% round(2)` °C. 
+
+# Save table for Supp Info
+
+```{r TableSuppInfoDriverValues}
+df.suppinfo <- df %>% 
+  dplyr::select(prov, SHM, invEMT, EH.20km.PC1,EH.20km.PC2, EH.1km.PC1,EH.1km.PC2,Nb.val.20km,Nb.val.1km)
+  
+
+print(xtable(df.suppinfo, type = "latex",digits=2),
+      file = "tables/Drivers/ClimaticDriversValues.tex",
+      include.rownames=FALSE)
+```
 
 # Climatic transfer distances
 
