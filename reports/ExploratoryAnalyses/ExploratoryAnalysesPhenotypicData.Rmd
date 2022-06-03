@@ -1169,7 +1169,9 @@ tibble(Traits=c(rep("Height",4),"Mean bud burst date", "Mean duration of bud bur
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F)
 ```
 
+## Failed visualisations
 
+Here initially, I wanted to visualise the population-specific total genetic variances against the potential drivers of genetic variation. However, such visualisation is not possible with the raw data as we do not have access directly to the population-specific total genetic variances (which have to be estimated with quantitative genetic models like the one used in our study). That's why the following plots make no sense (I guess to remove later)...
 
 ```{r PopSpecificVarMeans}
 tab <- c("MeanBB","MeanDBB") %>% 
@@ -1206,5 +1208,176 @@ tab %>%
   kable_styling(font_size=10,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
+```
+
+
+```{r ScatterPlotsSdPopAgainstDrivers}
+#  !!  this script does not take into account the variable transformations! (centering, and log) !! 
+# That's why it is not used for data visualization in the Supp Info.
+
+drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+tab <- c("MeanBB","MeanDBB") %>% 
+  mclapply(function(x) {
+  if(x=="MeanBB") data <- meanBB else if(x=="MeanDBB") 
+    data <- meanDBB
+    data %>% 
+      dplyr::select(prov,mean) %>% 
+      drop_na() %>% 
+      dplyr::rename(value=mean) %>% 
+      group_by(prov) %>%  
+      dplyr::summarise_at("value",list(sd=sd)) %>% 
+      dplyr::mutate(trait=x)}) %>% 
+  bind_rows()
+
+tab <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","POR_SLA","d13C") %>% 
+  mclapply(function(x) 
+    data %>% 
+      dplyr::select(prov,x) %>% 
+      drop_na() %>% 
+      group_by(prov) %>% 
+      dplyr::summarise_at(all_of(x),list(sd=sd)) %>% 
+      mutate(trait=x)) %>% 
+  bind_rows() %>% 
+  bind_rows(tab)
+
+
+tab <- readRDS(file="data/DF_Drivers.rds") %>% 
+  dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+  dplyr::mutate(across(-prov, ~ scale(.)[,1])) %>%
+  set_names(c("prov",drivers)) %>% 
+  pivot_longer(cols=all_of(drivers),names_to = "driver.name",values_to="driver.value") %>% 
+  inner_join(tab,by="prov")
+  
+mclapply(traits,function(x){ 
+
+scatterplots <- mclapply(drivers, function(driver){
+
+  tab %>% 
+    dplyr::filter(trait==x,driver.name==driver) %>% 
+    ggplot(aes(x=driver.value, y=log(sd))) + 
+    geom_point()+
+    xlab(driver) + 
+    ylab("log(sd(trait))") +
+    #ylim(list.ylim[[x]]) +
+    panel_border() # a border around each panel
+  
+})
+
+names(scatterplots) <- drivers
+
+scatterplots[[2]] <- scatterplots[[2]] + ylab("")
+scatterplots[[3]] <- scatterplots[[3]] + ylab("")
+scatterplots[[4]] <- scatterplots[[4]] + ylab("")
+scatterplots[[6]] <- scatterplots[[6]] + ylab("")
+scatterplots[[7]] <- scatterplots[[7]] + ylab("")
+scatterplots[[8]] <- scatterplots[[8]] + ylab("")
+
+p <- plot_grid(plotlist=scatterplots, nrow=2)
+
+ggsave(p,file=paste0("figs/ExploratoryAnalyses/",x,"_ScatterPlots_LogSdTrait_Drivers.png"),height=10,width=18)
+  
+  })
+```
+
+
+```{r ScatterPlotsVarPopAgainstDrivers}
+# This script does take into account the data transformations (i.e.  mean-centering and log transformation)
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+tab.traits <- mclapply(traits,function(trait){ 
+  
+# Trait transformations
+if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
+    CenterResponseVariable <- TRUE
+    LogResponseVariable <- FALSE
+    
+    # SLA is not centered and we used its logarithm as response variable
+  }  else if(trait=="POR_SLA"){ 
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- TRUE
+    
+    # Height is not transformed
+  } else { 
+    CenterResponseVariable <- FALSE
+    LogResponseVariable <- FALSE
+  }
+
+  
+# Extracting the population-specific standard deviations for each trait
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+      
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::mutate(trait.value = rowMeans(select(.,contains("BDX")),na.rm=T)) %>%
+    execute_if(CenterResponseVariable, mutate(trait.value=trait.value-mean(trait.value))) %>% 
+    execute_if(LogResponseVariable, mutate(trait.value=log(trait.value))) %>% 
+    group_by(clon) %>% 
+    dplyr::summarise(trait.mean=mean(trait.value)) %>% 
+    mutate(prov=str_sub(clon,1,3)) %>% 
+    group_by(prov) %>% 
+    dplyr::summarise(trait.variance=var(trait.mean)) %>% 
+    mutate(trait=trait)
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait.value=all_of(trait)) %>% 
+    dplyr::select(prov,clon,trait.value) %>% 
+    drop_na() %>%  
+    execute_if(CenterResponseVariable, mutate(trait.value=trait.value-mean(trait.value))) %>% 
+    execute_if(LogResponseVariable, mutate(trait.value=log(trait.value))) %>% 
+    group_by(clon) %>% 
+    dplyr::summarise(trait.mean=mean(trait.value)) %>% 
+    mutate(prov=str_sub(clon,1,3)) %>% 
+    group_by(prov) %>% 
+    dplyr::summarise(trait.variance=var(trait.mean)) %>% 
+    mutate(trait=trait)
+  
+  }
+}) %>% bind_rows()
+
+
+tab <- readRDS(file="data/DF_Drivers.rds") %>% 
+  dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+  dplyr::mutate(across(-prov, ~ scale(.)[,1])) %>%
+  set_names(c("prov",drivers)) %>% 
+  pivot_longer(cols=all_of(drivers),names_to = "driver.name",values_to="driver.value") %>% 
+  inner_join(tab.traits,by="prov")
+  
+mclapply(traits,function(x){ 
+
+scatterplots <- mclapply(drivers, function(driver){
+
+  tab %>% 
+    dplyr::filter(trait==x,driver.name==driver) %>% 
+    ggplot(aes(x=driver.value, y=trait.variance)) + 
+    geom_point()+
+    xlab(driver) + 
+    ylab("Var(trait)") +
+    #ylim(list.ylim[[x]]) +
+    panel_border() # a border around each panel
+  
+})
+
+names(scatterplots) <- drivers
+
+scatterplots[[2]] <- scatterplots[[2]] + ylab("")
+scatterplots[[3]] <- scatterplots[[3]] + ylab("")
+scatterplots[[4]] <- scatterplots[[4]] + ylab("")
+scatterplots[[6]] <- scatterplots[[6]] + ylab("")
+scatterplots[[7]] <- scatterplots[[7]] + ylab("")
+scatterplots[[8]] <- scatterplots[[8]] + ylab("")
+
+p <- plot_grid(plotlist=scatterplots, nrow=2)
+
+ggsave(p,file=paste0("figs/ExploratoryAnalyses/",x,"_ScatterPlots_TraitVariance_Drivers.png"),height=10,width=18)
+  
+  })
 ```
 
