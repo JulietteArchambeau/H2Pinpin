@@ -54,6 +54,7 @@ library(knitr)        # CRAN v1.26
 library(reshape2)     # CRAN v1.4.4
 library(dplyr)        # CRAN v1.0.0
 library(tidyverse)    # CRAN v1.3.0
+library(ggplot2)
 library(kableExtra)   # CRAN v1.1.0
 library(rstan)        # CRAN v2.19.2
 library(broom)        # CRAN v0.5.2
@@ -509,9 +510,9 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
 }
 
 if(sub=="sub1"){
-  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig_sub1.png",height=8,width=10)} else if (sub=="sub2"){
-  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig_sub2.png",height=8,width=10)} else {
-  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_PaperFig.png",height=8,width=10)  
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_NotIncluded_sub1.png",height=8,width=10)} else if (sub=="sub2"){
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_NotIncluded_sub2.png",height=8,width=10)} else {
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_BetaX_MainMS.png",height=8,width=10)  
   }
 ```
 
@@ -626,9 +627,9 @@ p <- df.betaX %>%   ggplot(aes(x = Xp, y = estimate,ymin = conf.low, ymax = conf
 p
 
 if(sub=="sub1"){
-  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_PaperFig_sub1.png",height=8,width=12)} else if (sub=="sub2"){
-  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_PaperFig_sub2.png",height=8,width=10)} else {
-  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_PaperFig.png",height=8,width=12)  
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_SI_sub1.png",height=8,width=12)} else if (sub=="sub2"){
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_SI_sub2.png",height=8,width=10)} else {
+  ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Alldrivers_BetaX_SI.png",height=8,width=12)  
   }
 ```
 
@@ -893,6 +894,150 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon.png"),height=6
 })
 
 ```
+
+## $\sigma_{C_{p}}$ against $X_{p}$ (scatterplots)
+
+
+```{r ScatterplotsSigmaClonAgainstXp}
+traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+
+# Downloading and scaling (mean-centering) the potential drivers
+df.drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
+    dplyr::select(prov,A,D,EH.20km.PC1,EH.20km.PC2,EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+    dplyr::mutate(across(-prov, ~ scale(.)[,1]))
+
+# Extract the population names in the right order
+provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  arrange(by=tree) %>% 
+  distinct(prov) %>% 
+  pull()
+
+# Create df with median estimates of sigma_clon (the total genetic sd of each population)
+df.sigmaclon <- mclapply(traits,function(x){
+  
+df <- readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+   mclapply(function(driver) {
+     broom::tidyMCMC(driver,pars=("sigma_clon"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level) %>% 
+      mutate(Trait=x,
+             prov=provs) }) %>% 
+  bind_rows(.id="Drivers") %>% 
+  left_join(df.drivers,by="prov") %>% 
+  mutate(driver.value= case_when(
+    Drivers=="A" ~ A,
+    Drivers=="D" ~ D,
+    Drivers=="EH.20km.PC1" ~ EH.20km.PC1,
+    Drivers=="EH.20km.PC2" ~ EH.20km.PC2,
+    Drivers=="EH.1km.PC1" ~ EH.1km.PC1,
+    Drivers=="EH.1km.PC2" ~ EH.1km.PC2,
+    Drivers=="SHM" ~ SHM,
+    Drivers=="invEMT" ~ invEMT
+  )) %>% 
+  dplyr::select(-A,-D, -contains("km.PC"),-invEMT,-SHM) %>% 
+  mutate(Drivers= case_when(
+    Drivers=="EH.20km.PC1" ~ "EH1[20km]",
+    Drivers=="EH.20km.PC2" ~ "EH2[20km]",
+    Drivers=="EH.1km.PC1" ~ "EH1[1.6km]",
+    Drivers=="EH.1km.PC2" ~ "EH2[1.6km]",
+    Drivers %in% c("A","D","invEMT","SHM") ~Drivers))
+
+  })
+
+names(df.sigmaclon) <- traits
+
+# Create df with median, high and low 95% credible interval of betaX, sigma_K and mean_sigma_clon
+df.regression.lines <- mclapply(traits,function(x){
+readRDS(file=paste0("outputs/models/",x,".rds")) %>% 
+   mclapply(function(driver) {
+     broom::tidyMCMC(driver,pars=c("betaX","sigma_K","mean_sigma_clon"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level) %>% 
+      mutate(Trait=x) }) %>% 
+  bind_rows(.id="Drivers") %>% 
+  dplyr::select(-std.error) %>% 
+    mutate(Drivers= case_when(
+    Drivers=="EH.20km.PC1" ~ "EH1[20km]",
+    Drivers=="EH.20km.PC2" ~ "EH2[20km]",
+    Drivers=="EH.1km.PC1" ~ "EH1[1.6km]",
+    Drivers=="EH.1km.PC2" ~ "EH2[1.6km]",
+    Drivers %in% c("A","D","invEMT","SHM") ~Drivers)) %>% 
+  pivot_wider(names_from = term,values_from=c(estimate,conf.low,conf.high))})
+
+names(df.regression.lines) <- traits
+
+# List with y-axis limits for each trait
+list.ylim <- list()
+list.ylim[["POR_htoct12"]] <- c(-3,5.5)
+list.ylim[["BDX_htnov13"]] <- c(2.5,5.5)
+list.ylim[["BDX_htnov18"]] <- c(5.2,7)
+list.ylim[["AST_htnov12"]] <- c(2.2,5.2)
+list.ylim[["MeanBB"]] <- c(2.5,5)
+list.ylim[["MeanDBB"]] <- c(2.8,4.6)
+list.ylim[["POR_SLA"]] <- c(-4.8,-1.5)
+list.ylim[["d13C"]] <- c(-8,1)
+
+
+
+# Plot one graph for each trait (with eight subgraphs corresponding to each driver)
+mclapply(traits,function(x){ 
+
+
+scatterplots <- mclapply(df.regression.lines[[1]]$Drivers, function(driver){
+  
+  df2 <- df.regression.lines[[x]]
+  mean_sigma_clon <-  as.numeric(df2[df2$Drivers==driver,"estimate_mean_sigma_clon"])
+  sigma_K <- as.numeric(df2[df2$Drivers==driver,"estimate_sigma_K"])
+  betaX.median <- as.numeric(df2[df2$Drivers==driver,"estimate_betaX"])
+  betaX.low <- as.numeric(df2[df2$Drivers==driver,"conf.low_betaX"])
+  betaX.high <- as.numeric(df2[df2$Drivers==driver,"conf.high_betaX"])
+  
+  df.sigmaclon[[x]] %>% 
+  dplyr::filter(Drivers== driver) %>% 
+  ggplot(aes(x=driver.value, y=log(estimate))) + 
+  geom_point()+
+  xlab(driver) + ylab(TeX("$log(\\sigma_{C_p})$")) +
+  ylim(list.ylim[[x]]) +
+  
+  # low crebible interval of betaX
+  geom_function(colour ="blue", linetype="dashed", size=1, fun = function(x) log(mean_sigma_clon) - ((sigma_K*sigma_K)/2)  + betaX.low*x) +
+  
+  # high credible interval of betaX
+  geom_function(colour ="forestgreen", linetype="dashed", size=1, fun = function(x) log(mean_sigma_clon) - ((sigma_K*sigma_K)/2)  + betaX.high*x) +
+    
+  # median estimate of betaX
+  geom_function(colour= "red", size=1,fun = function(x) log(mean_sigma_clon) - ((sigma_K*sigma_K)/2)  + betaX.median*x) +
+
+  panel_border() # a border around each panel
+})
+
+names(scatterplots) <- df.regression.lines[[1]]$Drivers
+
+scatterplots[[2]] <- scatterplots[[2]] + ylab("")
+scatterplots[[3]] <- scatterplots[[3]] + ylab("")
+scatterplots[[4]] <- scatterplots[[4]] + ylab("")
+scatterplots[[6]] <- scatterplots[[6]] + ylab("")
+scatterplots[[7]] <- scatterplots[[7]] + ylab("")
+scatterplots[[8]] <- scatterplots[[8]] + ylab("")
+
+p <- plot_grid(plotlist=scatterplots, nrow=2)
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_ScatterPlots_SigmaClon_Drivers.png"),height=10,width=18)
+
+  })
+
+```
+
+
 
 ## Broad-sense heritabilities $H^2_{p}$
 
@@ -1290,7 +1435,9 @@ drivers <- c("A","D", "EH.20km.PC1","EH.20km.PC2","EH.1km.PC1","EH.1km.PC2","SHM
 
 df <- mclapply(traits, function(x){
   mclapply(drivers,function(driver)
-  cor(count[[x]]$count,sigma2_clon[[x]]$estimate[sigma2_clon[[x]]$Drivers==driver])
+  paste(round(cor(count[[x]]$count,sigma2_clon[[x]]$estimate[sigma2_clon[[x]]$Drivers==driver]),3)," [", # median estimate
+       round(cor(count[[x]]$count,sigma2_clon[[x]]$conf.low[sigma2_clon[[x]]$Drivers==driver]),3),",",   # low 95% CI
+       round(cor(count[[x]]$count,sigma2_clon[[x]]$conf.high[sigma2_clon[[x]]$Drivers==driver]),3),"] ") # high 95% CI
   ) %>% 
   setNames(drivers)
 }) %>% 
@@ -1700,11 +1847,11 @@ p
 ggsave(p,file="figs/PosteriorDistributions/GeneticDiversity_betaX.png",height=9,width=13)
 ```
 
-# Isolation-by-distance
+# Geographic marginality
 
-Following the comments of referee #1 (first round of review in Heredity), we calculate an index to quantify (or at least try to capture) the geographic isolation of the populations within the species range. 
-For that, we use the distribution of maritime pine based on both the Euforgen distribution and the NFI plots of Spain and France. We define the center of the distribution as the point at mid-distance of the most extreme latitudes and longitudes where the presence of maritime pine has been observed. 
-Here are some maps showing maritime pine distribution, the population location and the center of the distribution.
+Following the comments of referee #1 (first round of review in Heredity), we calculate an index to quantify (or at least try to capture) the geographic marginality of the populations within the species range. 
+For that, we use the distribution of maritime pine based on both the Euforgen distribution and the NFI plots of Spain and France. We define the centre of the distribution as the point at mid-distance of the most extreme latitudes and longitudes where the presence of maritime pine has been observed. 
+Here are some maps showing maritime pine distribution, the population location and the centre of the distribution.
 
 ```{r MappingCenterDistributionIBD}
 library(raster)
@@ -1763,7 +1910,7 @@ mapIBD <- ggplot(PinpinDistri) +
 ggsave(mapIBD,file="maps/mapIBD.png",height=8,width=10)
 ```
 
-We then calculate the distance (in meters) between each population location and the center of the distribution. With the `geosphere` package.
+We then calculate the distance (in meters) between each population location and the centre of the distribution. With the `geosphere` package.
 
 ```{r FormatDataIBD}
 # calculate the distance to the point with the package geosphere
