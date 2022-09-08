@@ -149,12 +149,36 @@ The population-specific among-clones standard deviations $\sigma_{C_{p}}$ follow
 with $X_{p}$ the potential driver considered and $\beta_{x}$ its associated coefficient.
 
 
-Here is the stan model code:
+Here is the `Stan` model code:
 
 ```{r ModelCompilation}
 model = stan_model("scripts/StanModels/HierarchicalModel_VaryingInterClonesSD_OneCovariate.stan")
 model
 ```
+
+In the `Stan` code, we also calculate the posterior distribution of $\mathcal{R}^2$ in three different ways.
+
+The first way is the classical way of calculating $\mathcal{R}^2$ in the frequentist framework. This classical $\mathcal{R}^2$ corresponds to the proportion of variance explained by the model and is a commonly used measure of model fit. It is calculated as follows:
+
+$$\mathcal{R}^2 = \frac{Var_{\mu}}{Var_y} $$
+where $Var_{\mu}$ is the fitted variance, i.e. the variance of the modelled predicted means and  $Var_y$ is the total variance, i.e. the variance of the observations. 
+
+However, according to @gelman2019 this definition of $\mathcal{R}^2$ raises two problems in a Bayesian framework. First, it does not reflect the posterior uncertainty in the coefficients (which should remove or at least reduce the overfitting problem of least squares). Second, under some conditions(e.g. in the presence of strong prior information and weak data), the fitted variance might be higher than the total variance and thus $\mathcal{R}^2$ might be greater than 1.
+
+Therefore, @gelman2019 propose a Bayesian version of the classical $\mathcal{R}^2$, which is defined as:
+
+$$\mathcal{R}^2 = \frac{Var_{\mu}}{Var_{\mu}+Var_{res}} $$
+where $Var_{res}$ is the residual variance, which can be obtained with two different ways.
+
+The residual based $\mathcal{R}^2$ used draws from the residual distribution, such as:
+
+$$Var_{res}=Var_{n=1}^{N}(y_n-\mu_n)$$
+
+The model based $\mathcal{R}^2$ used draws from the modelled residual variance. For instance, for linear regression:
+
+$$Var_{res}=\sigma^2$$
+In this latter case, both $Var_{\mu}$ and $Var_{res}$ in the $\mathcal{R}^2$ formula are computed only using posterior quantities from the fitted model.
+
 
 `r knitr::opts_chunk$set(eval = F)`
 
@@ -288,6 +312,8 @@ ExtractParam <- function(x)  {
 For each of the eight trait, we ran eight models, one for each potential drivers:
 
 ```{r RunModel,eval=F}
+set.seed(444)
+
 ########################################
 # Running the models on a filtered dataset or not? (modification after the first round of review in Heredity)
 sub = "no" # if the dataset is not filtered.
@@ -326,7 +352,7 @@ for(i in names(list.trait)[-1]){
                                       "mean_sigma_clon","sigma_clon","sigma_K",
                                       #"alpha_clon","alpha_prov",#"alpha_block",
                                       # "y_rep" not included not to have a too heavy file
-                                      "R_squared","log_lik"),
+                                      "R_squared","bayes_R2_res","bayes_R2","log_lik"),
                                iter = n_iter, 
                                chains = n_chains, 
                                cores = n_chains,
@@ -1305,10 +1331,15 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),heigh
 
 
 ```{r RsquaredPosteriors}
-sub="no" # this part was only one on the unfiltered dataset
-traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+for(sub in c("no","sub1","sub2")){
+
+if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
-param <- "R_squared"
+params <- c("R_squared","bayes_R2_res","bayes_R2")
+
+for(param in params){
 
 df <- traits %>% 
   mclapply(ExtractParam) %>% 
@@ -1339,8 +1370,8 @@ p <- df %>%
   ggplot(aes(x = trait.names, y = estimate,ymin = conf.low, ymax = conf.high,color=Xp)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,alpha=0.6) +
   facet_grid(.~trait.class,scales="free", space = "free") + 
-  #facet_grid(~fct_relevel(Hyp,"Admixture","Climate harshness","Environmental heterogeneity"))
-  ylab(TeX("$R^{2}$")) + xlab("") +
+  ylab(TeX("$R^{2}$")) + 
+  xlab("") +
   labs(color = "Potential drivers") +
   scale_color_manual(values=rev(c("#7FBC41", "#4D9221" ,
                               "#DE77AE","#C51B7D" ,
@@ -1358,12 +1389,11 @@ p <- df %>%
       panel.grid.minor.x=element_blank(),
       panel.grid.major.x=element_blank()) +
     guides(color=guide_legend(ncol=2))
-    
-p
 
-ggsave(p, file="figs/PosteriorDistributions/ALLTRAITS_Rsquared.png",height=7,width=12)
+ggsave(p, file=paste0("figs/PosteriorDistributions/ALLTRAITS_",param,"_",sub,".png"),height=7,width=12)
+}
+}
 ```
-
 
 
 # Correlation btw the number of clones per pop and $\sigma^{2}_{C_{p}}$
