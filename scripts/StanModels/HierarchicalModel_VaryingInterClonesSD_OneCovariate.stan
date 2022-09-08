@@ -89,6 +89,8 @@ generated quantities {
   real<lower=0> sigma2_prov;
   real<lower=0> sigma2_block;
   vector[nprov] sigma2_clon;
+  
+  // Heritability
   vector[nprov] h2_prov;
 
   // Posterior predictive check
@@ -96,6 +98,10 @@ generated quantities {
 
   // Log-Likelihood (for WAIC/loo computations)
   vector[N] log_lik;
+  
+  // Bayesian R2
+  real bayes_R2_res; // residual based R2
+  real bayes_R2;     // model based R2, i.e.  using modelled (approximate) residual variance
 
   sigma2_r = square(sigma_r);
   sigma2_prov = square(sigma_prov);
@@ -106,5 +112,9 @@ generated quantities {
     y_rep[i] = normal_rng(mu[i], sigma_r);
     log_lik[i] = normal_lpdf(y[i]| mu[i], sigma_r); // log probability density function
   }
+  
+  bayes_R2_res = variance(mu) / (variance(mu) + variance(y-mu));
+  bayes_R2 = variance(mu) / (variance(mu) + sigma2_r);
+  
 }
 
