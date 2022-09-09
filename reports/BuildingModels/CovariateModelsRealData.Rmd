@@ -161,14 +161,14 @@ In the `Stan` code, we also calculate the posterior distribution of $\mathcal{R}
 The first way is the classical way of calculating $\mathcal{R}^2$ in the frequentist framework. This classical $\mathcal{R}^2$ corresponds to the proportion of variance explained by the model and is a commonly used measure of model fit. It is calculated as follows:
 
 $$\mathcal{R}^2 = \frac{Var_{\mu}}{Var_y} $$
-where $Var_{\mu}$ is the fitted variance, i.e. the variance of the modelled predicted means and  $Var_y$ is the total variance, i.e. the variance of the observations. 
+where $Var_{\mu}$ is the fitted variance, i.e. the variance of the modelled predicted means and  $Var_y$ is the total variance, i.e. the variance of the observations. This way of calculating $\mathcal{R}^2$ was used in the tutorial ["Modèle Hiérarchique avec Stan"](https://stateofther.github.io/post/rstan/WorkingWithStan_part2.html) of Matthieu Authier & Eric Parent.
 
 However, according to @gelman2019 this definition of $\mathcal{R}^2$ raises two problems in a Bayesian framework. First, it does not reflect the posterior uncertainty in the coefficients (which should remove or at least reduce the overfitting problem of least squares). Second, under some conditions(e.g. in the presence of strong prior information and weak data), the fitted variance might be higher than the total variance and thus $\mathcal{R}^2$ might be greater than 1.
 
 Therefore, @gelman2019 propose a Bayesian version of the classical $\mathcal{R}^2$, which is defined as:
 
 $$\mathcal{R}^2 = \frac{Var_{\mu}}{Var_{\mu}+Var_{res}} $$
-where $Var_{res}$ is the residual variance, which can be obtained with two different ways.
+where $Var_{\mu}$ is the variance of modelled predictive means and $Var_{res}$ is the residual variance, which can be obtained with two different ways.
 
 The residual based $\mathcal{R}^2$ used draws from the residual distribution, such as:
 
@@ -184,7 +184,7 @@ In this latter case, both $Var_{\mu}$ and $Var_{res}$ in the $\mathcal{R}^2$ for
 
 # Functions used
 
-```{r FunctionDownloadFormatData,eval=F}
+```{r FunctionDownloadFormatData,eval=T}
 DownloadData <- function(trait,sub){
 
 #### Trait transformations
@@ -309,9 +309,7 @@ ExtractParam <- function(x)  {
 
 # Running and saving the models
 
-For each of the eight trait, we ran eight models, one for each potential drivers:
-
-```{r RunModel,eval=F}
+```{r, eval=T}
 set.seed(444)
 
 ########################################
@@ -321,21 +319,24 @@ sub = "no" # if the dataset is not filtered.
 ### Two filtered datasets:
 
 # Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-sub = "sub1"
-sub.clones = 3
-sub.ind = 3
+#sub = "sub1"
+#sub.clones = 3
+#sub.ind = 3
 
 # Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-sub = "sub2"
-sub.clones = 10
-sub.ind = 6
+#sub = "sub2"
+#sub.clones = 10
+#sub.ind = 6
 ########################################
 
 if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
   traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+```
 
 
+For each of the eight trait, we ran eight models, one for each potential drivers:
 
+```{r RunModel,eval=F}
 for(trait in traits){
 list.trait <- DownloadData(trait,sub)
 
@@ -384,7 +385,7 @@ saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))}
 
 ### One graph per trait
 
-```{r BetaXTraitSpecificFigure,eval=F}
+```{r BetaXTraitSpecificFigure,eval=T}
 if(sub=="no"){
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
@@ -430,7 +431,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_BetaX.png"),height=8,wid
 ### Main figure of the paper (Figure 2) (5 drivers)
 
 
-```{r}
+```{r Figure2,eval=T}
 if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
   traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
 
@@ -546,7 +547,7 @@ if(sub=="sub1"){
 ### Figure in Supp Info (5 drivers, all traits)
 
 
-```{r AllTraits}
+```{r AllTraits,eval=T}
 if(sub=="sub2"){traits <- c("BDX_htnov18","BDX_htnov13","AST_htnov12","MeanBB","MeanDBB")} else {
   traits <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
 
@@ -871,7 +872,7 @@ p
 
 ## Total genetic variances $\sigma^{2}_{C_{p}}$
 
-```{r SigmaClon}
+```{r SigmaClon,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
@@ -924,7 +925,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon.png"),height=6
 ## $\sigma_{C_{p}}$ against $X_{p}$ (scatterplots)
 
 
-```{r ScatterplotsSigmaClonAgainstXp}
+```{r ScatterplotsSigmaClonAgainstXp,eval=T}
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
 # Downloading and scaling (mean-centering) the potential drivers
@@ -1071,7 +1072,7 @@ We calculated population-specific broad-sense heritabilities, such as:
 
 $$ H^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
 
-```{r H2Figures}
+```{r H2Figures,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
@@ -1123,7 +1124,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_H2prov.png"),height=6,wi
 
  For the discussion, we calculated the mean heritability values of each trait
  
-```{r H2means}
+```{r H2means,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
@@ -1151,7 +1152,7 @@ h2means
 ## Variance partitioning
 
 
-```{r VartPartFigs}
+```{r VartPartFigs,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
@@ -1195,7 +1196,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_VarPart.png"),height=6,w
 ```
 
 
-```{r VarPartAllHeights}
+```{r VarPartAllHeights,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12")
 drivers <- c("A","EH1[20km]","EH2[20km]","SHM","invEMT") 
@@ -1330,7 +1331,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),heigh
 ## $\mathcal{R}^{2}$
 
 
-```{r RsquaredPosteriors}
+```{r RsquaredPosteriors,eval=T}
 for(sub in c("no","sub1","sub2")){
 
 if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
@@ -1398,7 +1399,7 @@ ggsave(p, file=paste0("figs/PosteriorDistributions/ALLTRAITS_",param,"_",sub,".p
 
 # Correlation btw the number of clones per pop and $\sigma^{2}_{C_{p}}$
 
-```{r CorrealtionNumberClones}
+```{r CorrealtionNumberClones,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
@@ -1486,7 +1487,7 @@ df %>% kable(digits=3,"latex")
 
 # Climatic transfer distances
 
-```{r FunctionDownloadDataCTD}
+```{r FunctionDownloadDataCTD,eval=F}
 sub="no" # this part was only one on the unfiltered dataset
 
 DownloadDataCTD <- function(trait){
@@ -1557,7 +1558,7 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
 }
 ```
 
-```{r RunningModelsCTD}
+```{r RunningModelsCTD,eval=F}
 sub="no" # this part was only one on the unfiltered dataset
 
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
@@ -1655,7 +1656,7 @@ ggsave(p,file="figs/PosteriorDistributions/CTD.png",height=9,width=9)
 
 We want to estimate the relationship between within-population quantitative genetic variation and genetic diversity (*expected Nei’s heterozygosity* $H_e$), to check that demographic factors do not influence quantitative genetic variation. For that, we take the Nei’s heterozygosity $H_e$ values from @rodriguez2016capturing, for both nuSSRs (12 nuclear microsatellites) and SNPs (266 SNP markers).
 
-```{r GeneticDiversityRodriguezQuilon}
+```{r GeneticDiversityRodriguezQuilon,eval=T}
 drivers <- readRDS(file="data/DF_Drivers.rds") %>% 
     dplyr::select(prov) %>% 
     dplyr::mutate(He.nuSSRs=case_when(prov=="HOU" ~ 0.55,
@@ -2090,7 +2091,7 @@ ggsave(p,file="figs/PosteriorDistributions/IBD_betaX.png",height=9,width=10)
 
 # Experimental design 
 
-```{r ExpDesign}
+```{r ExpDesign,eval=T}
 sub="no" # this part was only one on the unfiltered dataset
 
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
