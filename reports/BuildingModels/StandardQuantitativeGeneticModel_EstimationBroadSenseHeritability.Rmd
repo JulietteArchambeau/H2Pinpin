@@ -347,6 +347,88 @@ p
 ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_BroadSenseHeritability.png",height=6,width=8)
 ```
 
+
+
+```{r StandardQuantGenModelH2V2,fig.height=6,fig.width=8}
+sub="no"
+# I only made the script for sub="no"
+if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+
+post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
+  mclapply(function(x) broom::tidyMCMC(x,pars=("H2"),
+              droppars = NULL, 
+              estimate.method = point.est, 
+              ess = F, 
+              rhat = F, 
+              conf.int = T,
+              conf.level = conf.level)) %>% 
+  bind_rows() %>% 
+  mutate(Traits=traits)
+
+# Table for the Supplementary Information:
+post %>% dplyr::select(Traits,estimate,conf.low,conf.high) %>% kable(digits=3,"latex")
+
+traits.order.fig <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
+post$Traits <- as.factor(post$Traits)
+post$Traits <- factor(post$Traits,levels=rev(c(traits.order.fig)))
+
+
+p <- post  %>%   
+  ggplot(aes(x=estimate,y = Traits,colour=Traits,shape=Traits)) +
+  geom_point(size=4) + # 
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),height=0.1,size=1,show.legend = c(size = TRUE)) +
+  xlab(TeX("$H^{2}$ estimates")) + ylab("") +
+  
+  scale_y_discrete(labels=c("BDX_htnov18"="Height (Bordeaux, 85 months)",
+                            "BDX_htnov13"="Height (Bordeaux, 25 months)",
+                            "POR_htoct12"="Height (Portugal, 20 months)",
+                            "AST_htnov12"="Height (Asturias, 21 months)",
+                            "MeanBB"="Mean bud burst date (Bordeaux)",
+                            "MeanDBB"="Mean duration of bud burst (Bordeaux)",
+                            "POR_SLA"="Specific Leaf Area (Portugal)",
+                            "d13C"=parse(text = TeX("$\\delta^{13}C$ (Portugal)"))
+                            )) +
+  
+  
+  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)), #
+                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
+  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
+                                "Height (Bordeaux, 25 months)",
+                                "Height (Portugal, 20 months)",
+                                "Height (Asturias, 21 months)",
+                                "Mean bud burst date",
+                                "Mean duration of bud burst",
+                                "Specific Leaf Area",
+                                d13c)),
+                     values = c(15, 15,17, 17,16,16,16,16)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=16),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      axis.ticks.x = element_blank(),
+      legend.position = "none",
+      strip.text.x = element_blank(),
+      panel.grid.minor.y=element_blank(),
+      panel.grid.major.y=element_blank()) +
+    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
+
+p
+
+ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_BroadSenseHeritability_V2.png",height=8,width=14)
+```
+
+
+
 ```{r StandardQuantGenModelPI,fig.height=8,fig.width=12}
 post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
   mclapply(function(x) broom::tidyMCMC(x,pars=("pi"),
