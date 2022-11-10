@@ -64,6 +64,7 @@ library(kableExtra) # CRAN v1.1.0
 library(hierfstat)  # CRAN v0.04-22
 library(matrixcalc) # CRAN v1.0-3
 library(latex2exp)  # CRAN v0.4.0
+library(psych)      # CRAN v1.8.12 (pairs.panels function)
 library(xtable)
 #options(knitr.table.format = "latex")
 ```
@@ -117,6 +118,30 @@ for (i in 1:length(gp$prov)){
 colnames(gp) <- c("prov","gpNA","gpC","gpCS","gpFA","gpIA","gpSES","mainGP")
 
 df <- left_join(df,gp,by="prov")
+```
+
+```{r CSVforClimateDT, eval=F}
+# We prepare two datasets to extract the climatic variables from the climate downscaling tool
+
+# A first dataset with the original elevation values of the populations
+# Provenance coordinates
+provcoord <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
+provcoord <- unique(provcoord[,c("prov","latitude_prov","longitude_prov","altitude_prov")])
+
+# Remove the ROD population because it has no genomic data,
+# and the MAD population because it has only one clone (so the genetic variation can't
+# be estimated)
+provcoord <- provcoord[!(provcoord$prov=="ROD"|provcoord$prov=="MAD"),]
+colnames(provcoord) <- c("prov","longitude","latitude","altitude")
+
+write_csv(provcoord,"data/Climate/Raw/ClimateDTdownloads/InitialElevationData/provenance_coordinates_readyforClimateDT.csv")
+
+
+
+# A second dataset with the elevation values based on the DEEM values of the climateDT
+provcoord <- read_csv("data/Climate/Raw/ClimateDTdownloads/InitialElevationData/ClimateDT_report.csv") %>% 
+  dplyr::select(ID, Latitude,Longitude,RefElev1kmFORdownscaling) %>% 
+  write_csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/provenance_coordinates_readyforClimateDT.csv")
 ```
 
 
@@ -1471,6 +1496,60 @@ df %>%
 ```
 
 The mean extreme minimum temperature across populations is `r df$EMT %>% mean() %>% round(2)` °C. 
+
+
+## New indices of climate harshness after review
+
+```{r}
+climDTinit <- read_csv("data/Climate/Raw/ClimateDTdownloads/InitialElevationData/ClimateDT_outputs.csv") %>% 
+  group_by(ID) %>% 
+  dplyr::summarise(mean_bio6=mean(bio6),
+            mean_SHM=mean(SHM),
+            mean_EMT=mean(EMT),
+            min_bio6=min(bio6),
+            max_SHM=max(SHM),
+            min_EMT=min(EMT),
+            var_bio6=var(bio6),
+            var_SHM=var(SHM),
+            var_EMT=var(EMT)) %>% 
+  dplyr::rename(prov=ID) %>% 
+  merge(df[,c("prov","EMT","SHM")],by="prov")
+
+# vizualisation
+climDTinit %>% pairs.panels(scale=T,hist.col="palegreen1")
+```
+
+
+```{r}
+climDTdeem <- read_csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/ClimateDT_outputs.csv") %>% 
+  group_by(ID) %>% 
+  dplyr::summarise(mean_bio6=mean(bio6),
+            mean_SHM=mean(SHM),
+            mean_EMT=mean(EMT),
+            min_bio6=min(bio6),
+            max_SHM=max(SHM),
+            min_EMT=min(EMT),
+            var_bio6=var(bio6),
+            var_SHM=var(SHM),
+            var_EMT=var(EMT)) %>% 
+  dplyr::rename(prov=ID) %>% 
+  merge(df[,c("prov","EMT","SHM")],by="prov")
+
+# vizualisation
+climDTdeem %>% pairs.panels(scale=T,hist.col="palegreen1")
+
+climDTinit[climDTinit$prov=="CAS",] <- climDTdeem[climDTdeem$prov=="CAS",]
+
+climDTinit <- climDTinit %>% 
+  mutate(
+  mean_invbio6 = mean_bio6 * (-1),
+  min_invbio6 = min_bio6 * (-1))
+
+saveRDS(climDTinit,file="data/DF_NewDriversAfterReview.rds")
+```
+
+
+
 
 # Save table for Supp Info
 
