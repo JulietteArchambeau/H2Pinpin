@@ -1501,7 +1501,7 @@ The mean extreme minimum temperature across populations is `r df$EMT %>% mean() 
 ## New indices of climate harshness after review
 
 ```{r}
-climDTinit <- read_csv("data/Climate/Raw/ClimateDTdownloads/InitialElevationData/ClimateDT_outputs.csv") %>% 
+climDTinit <- read.csv("data/Climate/Raw/ClimateDTdownloads/InitialElevationData/ClimateDT_outputs.csv") %>% 
   group_by(ID) %>% 
   dplyr::summarise(mean_bio6=mean(bio6),
             mean_SHM=mean(SHM),
@@ -1521,7 +1521,7 @@ climDTinit %>% pairs.panels(scale=T,hist.col="palegreen1")
 
 
 ```{r}
-climDTdeem <- read_csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/ClimateDT_outputs.csv") %>% 
+climDTdeem <- read.csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/ClimateDT_outputs.csv") %>% 
   group_by(ID) %>% 
   dplyr::summarise(mean_bio6=mean(bio6),
             mean_SHM=mean(SHM),
@@ -1549,6 +1549,20 @@ saveRDS(climDTinit,file="data/DF_NewDriversAfterReview.rds")
 ```
 
 
+```{r}
+dfmaurizio <- read.csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/ClimateDT_report.csv") %>% 
+  dplyr::select(ID,Latitude,Longitude,Elevation,RefElev1kmFORdownscaling) %>% 
+  dplyr::rename(prov=ID,
+                Elevation_original=Elevation,
+                Elevation_DEEM=RefElev1kmFORdownscaling) %>% 
+  merge(climDTinit[,c("prov","EMT","min_EMT","mean_EMT","SHM","mean_SHM")],by="prov") %>% 
+  dplyr::rename(EMT_rast2021=EMT,
+                minEMT_ext2022=min_EMT,
+                meanEMT_rast2021=mean_EMT,
+                SHM_rast2021=SHM,
+                SHM_ext2022=mean_SHM) %>% 
+  write_csv("data/Climate/Raw/ClimateDTdownloads/ClimaticVariables.csv")
+```
 
 
 # Save table for Supp Info
