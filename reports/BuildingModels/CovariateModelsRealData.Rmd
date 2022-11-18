@@ -73,21 +73,6 @@ options(mc.cores = parallel::detectCores())
 ```
 
 
-```{r OptionDocs}
-# Options for sampling
-n_chains <- 4
-n_iter <- 2500
-n_warm <- 1250
-n_thin <- 1
-save_warmup = FALSE 
-
-theme_set(theme_bw(base_size = 20))
-
-# option for the MCMC intervals
-point.est="median"
-
-conf.level <- 0.95
-```
 
 # Model equation and code
 
@@ -182,12 +167,16 @@ In this latter case, both $Var_{\mu}$ and $Var_{res}$ in the $\mathcal{R}^2$ for
 
 `r knitr::opts_chunk$set(eval = F)`
 
-# Functions used
+# Functions used in the document
 
-```{r FunctionDownloadFormatData,eval=T}
-DownloadData <- function(trait,sub,dfdrivers,pop.drivers){
+## DownloadData()
 
-#### Trait transformations
+```{r FunctionDownloadData,eval=T}
+DownloadData <- function(trait,sub,drivers){
+
+# Trait transformations
+#######################
+  
     # Phenology-realted traits and delta13C are centered to help convergence
 if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
     CenterResponseVariable <- TRUE
@@ -204,16 +193,20 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
     LogResponseVariable <- FALSE
   }
 
-  
-#### Downloading and scaling (mean-centering) the potential drivers
-  drivers <- readRDS(file=paste0("data/",dfdrivers,".rds")) %>% 
-    dplyr::select(all_of(pop.drivers)) %>% 
-    dplyr::mutate(across(-prov,scale))
+
+# Potential drivers
+###################
+
+df.drivers <- readRDS(file=paste0("data/DF_Drivers.rds")) %>% # downloading the dataframe with the drivers
+    dplyr::select(all_of(c("prov",drivers))) %>% 
+    dplyr::mutate(across(-prov,scale)) # scaling (mean-centering) the potential drivers
+
 
   
-  
-#### Merging with the phenotypic data
-  if(trait=="MeanBB"|trait=="MeanDBB"){
+# Merging with the phenotypic data
+##################################
+
+if(trait=="MeanBB"|trait=="MeanDBB"){
       
   df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
     dplyr::filter(!(prov=="MAD")) %>% 
@@ -224,7 +217,7 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
     execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
     execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
     arrange(by=tree) %>% 
-    inner_join(drivers,by="prov") 
+    inner_join(df.drivers,by="prov") 
   
   } else {
     
@@ -236,13 +229,14 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
     execute_if(CenterResponseVariable, mutate(trait=trait-mean(trait))) %>% 
     execute_if(LogResponseVariable, mutate(trait=log(trait))) %>% 
     arrange(by=tree) %>% 
-    inner_join(drivers,by="prov")
+    inner_join(df.drivers,by="prov")
   
   }
   
   
-########################################################################################################################
-# Option to keep only populations represented by at least 4 clones & clones represented by at least 4 individuals.
+# Creating subsets
+##################
+
   if(sub=="sub1"|sub=="sub2"){
 
   ClonesToKeep <- df %>% 
@@ -263,12 +257,12 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
   
   df <- df %>% semi_join(PopsToKeep, by="prov") 
   }
-########################################################################################################################
-    
-  list.trait <- list(df=df)
 
-#### Create the stan lists:
-  list.stan <- lapply(colnames(drivers %>% dplyr::select(-prov)), function(x)    {
+
+# Creating the Stan lists
+#########################
+
+list.stan <- lapply(drivers, function(x)    {
     list(N=length(df$tree),
          y=df$trait,
          X=as.numeric(pull(unique(df[,c(x,"prov")]) %>% dplyr::select(contains(x)))),
@@ -280,20 +274,18 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
          clon = as.numeric(as.factor(df$clon)),
          bloc = as.numeric(as.factor(df$block)))})
   
-  names(list.stan) <- colnames(drivers %>% dplyr::select(-prov))
+names(list.stan) <- drivers
   
-  return(c(list.trait,list.stan))
+return(c(list(df=df),list.stan))
 }
+```
 
+## ExtractParam() and ExtractPopSpecificParam()
 
-
+```{r FunctionExtractParam}
 ExtractParam <- function(x)  {
-  ModelOutputs <- if(sub=="sub1"){
-    readRDS(file=paste0("outputs/models/",x,"_sub1_",dfdrivers,".rds"))} else if (sub=="sub2") {
-    readRDS(file=paste0("outputs/models/",x,"_sub2_",dfdrivers,".rds"))} else {
-    readRDS(file=paste0("outputs/models/",x,"_",dfdrivers,".rds"))} 
   
-  ModelOutputs %>% 
+  readRDS(file=paste0("outputs/models/",x,"_",sub,".rds")) %>% 
   mclapply(function(x) broom::tidyMCMC(x,pars=param,
                 droppars = NULL, 
                 estimate.method = point.est, 
@@ -301,20 +293,96 @@ ExtractParam <- function(x)  {
                 rhat = F, 
                 conf.int = T,
                 conf.level = conf.level)) %>% 
-  bind_rows() %>% 
-  mutate(Xp=drivers,
-         Traits=x)
+  bind_rows(.id="Drivers") %>% 
+  mutate(Traits=x)
+}
+
+
+ExtractPopSpecificParam <- function(trait){
+
+  readRDS(file=paste0("outputs/models/",trait,"_",sub,".rds")) %>% 
+  mclapply(function(driver) {
+    broom::tidyMCMC(driver,pars=param,
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level) %>% 
+      mutate(Traits=trait,
+             prov=provs) }) %>%
+  bind_rows(.id="Drivers") %>% 
+  dplyr::filter(Drivers %in% selected.drivers) %>% 
+  mutate(Drivers=factor(Drivers,levels=selected.drivers)) 
 }
 ```
 
-# Running and saving the models
+## PlotParam()
+
+```{r}
+PlotParam <- function(x){
+  if(param == "betaX"){yaxis.label <- "$\\beta_{X}$ estimates"}
+  
+  p <- x %>% 
+  ggplot(aes(x = Drivers, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
+  facet_grid(.~Hyp,scales="free", space = "free") + 
+  ylab(TeX(yaxis.label)) + xlab("") +
+  scale_colour_manual(labels = trait.labels, # 
+                     values = trait.colors) +
+  scale_shape_manual(labels = trait.labels,
+                     values = trait.shapes) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      #legend.position = c(.3, .08),
+      #legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=1))
+  
+  return(p)
+
+}
+```
+
+
+# Options and parameters
+
+```{r OptionDocs}
+# DOCUMENT OPTIONS
+##################
+
+# Sampling in Bayesian models
+n_chains <- 4 # number of chains (MCMC)
+n_iter <- 2500 # number of iterations
+n_warm <- 1250 # number of iterations in the warm-up phase
+n_thin <- 1 # thinning interval
+save_warmup = FALSE 
+
+theme_set(theme_bw(base_size = 20))
+
+# Credible intervals
+point.est="median"
+conf.level <- 0.95
+```
+
 
 ```{r, eval=T}
+# DOCUMENT PARAMETERS
+#####################
+
+
+# Reproductibility
 set.seed(444)
 
 ########################################
 # Running the models on a filtered dataset or not? (modification after the first round of review in Heredity)
-sub = "no" # if the dataset is not filtered.
+sub = "alldata" # if the dataset is not filtered.
 
 ### Two filtered datasets:
 
@@ -329,33 +397,73 @@ sub = "no" # if the dataset is not filtered.
 #sub.ind = 6
 ########################################
 
-# After the review in Heredity, we add other indices.
-# To run the models on the initial set of indices: 
-# dfdrivers = "DF_Drivers"
-# pop.drivers = c("prov","A","D","EH.20km.PC1","EH.20km.PC2","EH.1km.PC1","EH.1km.PC2","SHM","invEMT")
+# Dataset in which the potential drivers are
+dfdrivers = "DF_Drivers"
 
-# To run the models on the new indices: "DF_NewDriversAfterReview"
-dfdrivers = "DF_NewDriversAfterReview" 
-pop.drivers = c("prov","mean_invbio6","min_invbio6","mean_SHM","max_SHM","var_SHM","var_bio6")
+# Vector of the names of the potential drivers
+drivers = c("A","D", # population admixture indexes
+            "SH.20km.PC1","SH.20km.PC2","SH.1km.PC1","SH.1km.PC2", # spatial environmental heterogeneity indexes
+            "mean_bio6","mean_MCMT","mean_EMT","mean_bio14","mean_SHM","mean_MSP", # climate harhness indexes
+            "var_bio6","var_MCMT","var_EMT","var_bio14","var_SHM","var_MSP") # temporal heterogeneity indexes
+
+selected.drivers <- c("A","D",
+                      "mean_bio6","mean_bio14",
+                      "SH.20km.PC1","SH.20km.PC2","SH.1km.PC1","SH.1km.PC2",
+                      "var_bio6","var_bio14")
+
+selected.drivers.labels <- c("A","D",
+                             "mean(bio6)","mean(bio14)",
+                             "SH1[20km]","SH2[20km]","SH1[1.6km]","SH2[1.6km]", 
+                             "variance(bio6)","variance(bio14)")
+
+# Downloading and scaling (mean-centering) the potential drivers
+df.drivers <- readRDS(file=paste0("data/DF_Drivers.rds")) %>% # downloading the dataframe with the drivers
+    dplyr::select(all_of(c("prov",drivers))) %>% 
+    dplyr::mutate(across(-prov,scale)) # scaling (mean-centering) the potential drivers
 
 
-if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
-  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
+# Traits
+########
+
+if(sub=="sub2"){traits <- c("AST_htnov12","BDX_htnov13","BDX_htnov18","MeanBB","MeanDBB")} else {
+  traits <- c("POR_htoct12","AST_htnov12","BDX_htnov13","BDX_htnov18","MeanBB","MeanDBB","POR_SLA","d13C")}
+
+d13c <- parse(text = TeX("$\\delta^{13}C$ (Fundão)"))
+
+# Populations
+#############
+
+# Extract the population names in the right order
+provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+  dplyr::filter(!(prov=="MAD")) %>% 
+  arrange(by=tree) %>% 
+  distinct(prov) %>% 
+  pull()
+
+
+# Options for figures
+######################
+
+selected.drivers.colors <- c("#4D9221" ,"#7FBC41", "#C51B7D" ,"#DE77AE",
+                              "#2D004B","#542788" ,"#8073AC" ,"#B2ABD2",
+                              "#E08214" ,"#FDB863")
 ```
 
+# Running and saving the models
 
-For each of the eight trait, we ran eight models, one for each potential drivers:
+For each of the eight trait, we ran eight models, one for each potential driver:
 
 ```{r RunModel,eval=F}
 for(trait in traits){
-list.trait <- DownloadData(trait,sub,dfdrivers,pop.drivers)
+  
+stanlist.drivers <- DownloadData(trait,sub,drivers)
 
 list.models <- list()
 
-for(i in names(list.trait)[-1]){
+for(i in names(stanlist.drivers)[-1]){
   
   list.models[[i]] <- sampling(model, 
-                               data = list.trait[[i]], 
+                               data = stanlist.drivers[[i]], 
                                pars=c("beta0","betaX",
                                       "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
                                       "h2_prov",
@@ -370,33 +478,584 @@ for(i in names(list.trait)[-1]){
                                save_warmup = save_warmup,
                                thin=n_thin)
 }
-
-if(sub=="sub1"){
-saveRDS(list.models,file=paste0("outputs/models/",trait,"_sub1_",dfdrivers,".rds"))} else if (sub=="sub2"){
-saveRDS(list.models,file=paste0("outputs/models/",trait,"_sub2_",dfdrivers,".rds"))} else {
-saveRDS(list.models,file=paste0("outputs/models/",trait,"_",dfdrivers,".rds"))}
-
-
+saveRDS(list.models,file=paste0("outputs/models/",trait,"_",sub,".rds"))
 }
 ```
 
 We use the `loo` package to compare the models based on the [ELPD](http://mc-stan.org/loo/reference/loo-glossary.html).
 
 ```{r Loo,eval=F}
-if(sub=="no"){ # we only ran this analysis for the unfiltered dataset
+if(sub=="alldata"){ # we only ran this analysis for the unfiltered dataset
 loos <- mclapply(list.models,loo)
 loocompare <- loo_compare(x=loos)
-saveRDS(loocompare,file=paste0("outputs/loo/",trait,".rds"))}
+saveRDS(loocompare,file=paste0("outputs/loo/",trait,"_",sub,".rds"))}
 ```
 
 # Posterior distributions
 
 ## $\beta_{X}$
 
+> After Heredity second review
+
+```{r AllTraits,eval=T}
+param <- "betaX"
+
+df.betaX <- mclapply(traits,ExtractParam) %>% 
+  bind_rows() %>%
+  mutate(Drivers=case_when(Drivers=="SH.20km.PC1"~"SH1[20km]",
+                      Drivers=="SH.20km.PC2"~"SH2[20km]",
+                      Drivers=="SH.1km.PC1"~"SH1[1.6km]",
+                      Drivers=="SH.1km.PC2"~"SH2[1.6km]",
+                      Drivers=="mean_bio6"~"mean(bio6)",
+                      Drivers=="mean_MCMT"~"mean(MCMT)",
+                      Drivers=="mean_EMT"~"mean(EMT)",
+                      Drivers=="mean_bio14"~"mean(bio14)",
+                      Drivers=="mean_MSP"~"mean(MSP)",
+                      Drivers=="mean_SHM"~"mean(SHM)",
+                      Drivers=="var_bio6"~"variance(bio6)",
+                      Drivers=="var_MCMT"~"variance(MCMT)",
+                      Drivers=="var_EMT"~"variance(EMT)",
+                      Drivers=="var_bio14"~"variance(bio14)",
+                      Drivers=="var_MSP"~"variance(MSP)",
+                      Drivers=="var_SHM"~"variance(SHM)",
+                      TRUE ~ as.character(Drivers)),
+         Hyp=case_when(Drivers=="A"~"Admixture",
+                       Drivers=="D"~"Admixture",
+                       Drivers=="SH1[20km]"~"Spatial heterogeneity",
+                       Drivers=="SH2[20km]"~"Spatial heterogeneity",
+                       Drivers=="SH1[1.6km]"~"Spatial heterogeneity",
+                       Drivers=="SH2[1.6km]"~"Spatial heterogeneity",
+                       Drivers=="mean(bio6)"~"Climate harshness",
+                       Drivers=="mean(MCMT)"~"Climate harshness",
+                       Drivers=="mean(EMT)"~"Climate harshness",
+                       Drivers=="mean(bio14)"~"Climate harshness",
+                       Drivers=="mean(SHM)"~"Climate harshness",
+                       Drivers=="mean(MSP)"~"Climate harshness",
+                       Drivers=="variance(bio6)"~"Temporal heterogeneity",
+                       Drivers=="variance(MCMT)"~"Temporal heterogeneity",
+                       Drivers=="variance(EMT)"~"Temporal heterogeneity",
+                       Drivers=="variance(bio14)"~"Temporal heterogeneity",
+                       Drivers=="variance(SHM)"~"Temporal heterogeneity",
+                       Drivers=="variance(MSP)"~"Temporal heterogeneity"),
+         TraitType=case_when(Traits=="POR_htoct12"~"Morphological",
+                             Traits=="BDX_htnov13"~"Morphological",
+                             Traits=="AST_htnov12"~"Morphological",
+                             Traits=="BDX_htnov18"~"Morphological",
+                             Traits=="MeanBB"~"Phenological",
+                             Traits=="MeanDBB"~"Phenological",
+                             Traits=="POR_SLA"~"Functional",
+                             Traits=="d13C"~"Functional"),
+         Traits=factor(Traits,levels=c(traits)))
+
+
+if(sub=="sub2"){
+  trait.labels <- c("Height (Asturias, 21 months)",
+                    "Height (Bordeaux, 25 months)",
+                    "Height (Bordeaux, 85 months)",
+                    "Mean bud burst date (Bordeaux)",
+                    "Mean duration of bud burst (Bordeaux)")
+  trait.colors <- c("#B2182B","#D73027", "#FDAE61","#5AAE61","#A6DBA0")
+  trait.shapes <- c(16,16,16,17, 17)
+  width.png.selected.drivers=10} else {
+  trait.labels <- c("Height (Fundão, 20 months)",
+                    "Height (Asturias, 21 months)",
+                    "Height (Bordeaux, 25 months)",
+                    "Height (Bordeaux, 85 months)",
+                    "Mean bud burst date (Bordeaux)",
+                    "Mean duration of bud burst (Bordeaux)",
+                    "Specific Leaf Area (Fundão)",
+                    d13c)
+  trait.colors <- c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")
+  trait.shapes <- c(16,16,16,16, 17,17,15,15)
+  width.png.selected.drivers=18}
+
+
+# Generating the plot with all drivers
+PlotParam(df.betaX) %>% ggsave(file = paste0("figs/PosteriorDistributions/AllTestedDrivers_",sub,".png"),width=28,height=12)
+
+# Generating the plot with only the selected drivers
+df.betaX %>% 
+  dplyr::filter(Drivers %in% selected.drivers.labels) %>% 
+  dplyr::mutate(Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
+  PlotParam %>% 
+  ggsave(file = paste0("figs/PosteriorDistributions/SelectedDrivers_",sub,".png"),width=width.png.selected.drivers,height=10)
+```
+
+
+## Total genetic variances $\sigma^{2}_{C_{p}}$
+
+```{r SigmaClon,eval=T}
+param = "sigma2_clon"
+
+mclapply(traits, function(trait){
+
+p <- ExtractPopSpecificParam(trait) %>% 
+   ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=selected.drivers.colors,
+                     labels=selected.drivers.labels) +
+  xlab("Populations") +
+  ylab(TeX("$\\sigma^{2}_{C_{p}}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = "bottom",
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=5))
+  
+    ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_SigmaClon_",sub,".png"),height=6,width=22) })
+
+
+
+
+# mclapply(traits,function(x){
+# 
+# p <- readRDS(file=paste0("outputs/models/",x,"_",sub,".rds")) %>% 
+#   mclapply(function(x) {
+#     broom::tidyMCMC(x,pars=(param),
+#                 droppars = NULL, 
+#                 estimate.method = point.est, 
+#                 ess = F, 
+#                 rhat = F, 
+#                 conf.int = T,
+#                 conf.level = conf.level)}) %>%  
+#   bind_rows(.id="Drivers") %>% 
+#   mutate(Traits=x,
+#          prov=rep(provs,length(drivers))) %>% 
+#   dplyr::filter(Drivers %in% selected.drivers) %>% 
+#   mutate(Drivers=factor(Drivers,levels=selected.drivers)) %>% 
+#   ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+#   geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+#   scale_color_manual(values=c( "#4D9221" ,"#7FBC41", "#C51B7D" ,"#DE77AE",
+#                               
+#                               "#2D004B","#542788" ,"#8073AC" ,"#B2ABD2",
+#                               "#E08214" ,"#FDB863" ),
+#                      labels=selected.drivers.labels) +
+#   xlab("Populations") +
+#   ylab(TeX("$\\sigma^{2}_{C_{p}}$ estimates")) +
+#   labs(color = "Potential drivers") +
+#   theme(legend.position = "bottom",
+#         panel.grid.minor.x=element_blank(),
+#         panel.grid.major.x=element_blank())  +
+#     guides(color=guide_legend(ncol=5))
+#     
+#   ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon_",sub,".png"),height=6,width=22)
+#   
+# })
+```
+
+
+## $\sigma_{C_{p}}$ against $X_{p}$ (scatterplots)
+
+
+```{r ScatterplotsSigmaClonAgainstXp,eval=T}
+param = "sigma_clon"
+
+df.sigmaclon <- mclapply(traits, function(trait){
+
+p <- ExtractPopSpecificParam(trait) %>% 
+  left_join(df.drivers[,c("prov",selected.drivers)],by="prov") %>% 
+  mutate(driver.value = case_when(
+    Drivers=="A" ~ A,
+    Drivers=="D" ~ D,
+    Drivers=="SH.20km.PC1" ~ SH.20km.PC1,
+    Drivers=="SH.20km.PC2" ~ SH.20km.PC2,
+    Drivers=="SH.1km.PC1" ~ SH.1km.PC1,
+    Drivers=="SH.1km.PC2" ~ SH.1km.PC2,
+    Drivers=="mean_bio6" ~ mean_bio6,
+    Drivers=="mean_bio14" ~ mean_bio14,
+    Drivers=="var_bio6" ~ var_bio6,
+    Drivers=="var_bio14" ~ var_bio14
+  )) %>% 
+  dplyr::select(-A,-D, -contains("km.PC"),-contains("_bio")) %>% 
+  mutate(Drivers= case_when(
+    Drivers=="SH.20km.PC1" ~ "SH1[20km]",
+    Drivers=="SH.20km.PC2" ~ "SH2[20km]",
+    Drivers=="SH.1km.PC1" ~ "SH1[1.6km]",
+    Drivers=="SH.1km.PC2" ~ "SH2[1.6km]",
+    Drivers=="mean_bio6" ~ "mean(bio6)",
+    Drivers=="mean_bio14" ~ "mean(bio14)",
+    Drivers=="var_bio6" ~ "variance(bio6)",
+    Drivers=="var_bio14" ~ "variance(bio14)",
+    Drivers=="A" ~ "A",
+    Drivers=="D" ~ "D"))
+
+})
+
+names(df.sigmaclon) <- traits
+
+
+# Create df with median, high and low 95% credible interval of betaX, sigma_K and mean_sigma_clon
+df.regression.lines <- mclapply(traits,function(x){
+readRDS(file=paste0("outputs/models/",x,"_",sub,".rds")) %>% 
+   mclapply(function(driver) {
+     broom::tidyMCMC(driver,pars=c("betaX","sigma_K","mean_sigma_clon"),
+                droppars = NULL, 
+                estimate.method = point.est, 
+                ess = F, 
+                rhat = F, 
+                conf.int = T,
+                conf.level = conf.level) %>% 
+      mutate(Traits=x) }) %>% 
+  bind_rows(.id="Drivers") %>% 
+  dplyr::filter(Drivers %in% selected.drivers) %>% 
+  mutate(Drivers=factor(Drivers,levels=selected.drivers)) %>% 
+  dplyr::select(-std.error) %>% 
+    mutate(Drivers= case_when(
+    Drivers=="SH.20km.PC1" ~ "SH1[20km]",
+    Drivers=="SH.20km.PC2" ~ "SH2[20km]",
+    Drivers=="SH.1km.PC1" ~ "SH1[1.6km]",
+    Drivers=="SH.1km.PC2" ~ "SH2[1.6km]",
+    Drivers=="mean_bio6" ~ "mean(bio6)",
+    Drivers=="mean_bio14" ~ "mean(bio14)",
+    Drivers=="var_bio6" ~ "variance(bio6)",
+    Drivers=="var_bio14" ~ "variance(bio14)",
+    Drivers=="A" ~ "A",
+    Drivers=="D" ~ "D")) %>% 
+  pivot_wider(names_from = term,values_from=c(estimate,conf.low,conf.high))})
+
+names(df.regression.lines) <- traits
+
+# List with y-axis limits for each trait
+list.ylim <- list()
+list.ylim[["POR_htoct12"]] <- c(-3,5.5)
+list.ylim[["BDX_htnov13"]] <- c(2.5,5.5)
+list.ylim[["BDX_htnov18"]] <- c(5.2,7)
+list.ylim[["AST_htnov12"]] <- c(2.2,5.2)
+list.ylim[["MeanBB"]] <- c(2.5,5)
+list.ylim[["MeanDBB"]] <- c(2.8,4.6)
+list.ylim[["POR_SLA"]] <- c(-4.8,-1.5)
+list.ylim[["d13C"]] <- c(-8,1)
+
+
+
+# Plot one graph for each trait (with eight subgraphs corresponding to each driver)
+mclapply(traits,function(x){ 
+
+
+scatterplots <- mclapply(selected.drivers.labels, function(driver){
+  
+  df2 <- df.regression.lines[[x]]
+  mean_sigma_clon <-  as.numeric(df2[df2$Drivers==driver,"estimate_mean_sigma_clon"])
+  sigma_K <- as.numeric(df2[df2$Drivers==driver,"estimate_sigma_K"])
+  betaX.median <- as.numeric(df2[df2$Drivers==driver,"estimate_betaX"])
+  betaX.low <- as.numeric(df2[df2$Drivers==driver,"conf.low_betaX"])
+  betaX.high <- as.numeric(df2[df2$Drivers==driver,"conf.high_betaX"])
+  
+  df.sigmaclon[[x]] %>% 
+  dplyr::filter(Drivers== driver) %>% 
+  ggplot(aes(x=driver.value, y=log(estimate))) + 
+  geom_point()+
+  xlab(driver) + ylab(TeX("$log(\\sigma_{C_p})$")) +
+  ylim(list.ylim[[x]]) +
+  
+  # low crebible interval of betaX
+  geom_function(colour ="blue", linetype="dashed", size=1, fun = function(x) log(mean_sigma_clon) - ((sigma_K*sigma_K)/2)  + betaX.low*x) +
+  
+  # high credible interval of betaX
+  geom_function(colour ="forestgreen", linetype="dashed", size=1, fun = function(x) log(mean_sigma_clon) - ((sigma_K*sigma_K)/2)  + betaX.high*x) +
+    
+  # median estimate of betaX
+  geom_function(colour= "red", size=1,fun = function(x) log(mean_sigma_clon) - ((sigma_K*sigma_K)/2)  + betaX.median*x) +
+
+  panel_border() # a border around each panel
+})
+
+names(scatterplots) <- selected.drivers.labels
+
+scatterplots[[2]] <- scatterplots[[2]] + ylab("")
+scatterplots[[3]] <- scatterplots[[3]] + ylab("")
+scatterplots[[4]] <- scatterplots[[4]] + ylab("")
+scatterplots[[5]] <- scatterplots[[5]] + ylab("")
+scatterplots[[7]] <- scatterplots[[7]] + ylab("")
+scatterplots[[8]] <- scatterplots[[8]] + ylab("")
+scatterplots[[9]] <- scatterplots[[9]] + ylab("")
+scatterplots[[10]] <- scatterplots[[10]] + ylab("")
+
+p <- plot_grid(plotlist=scatterplots, nrow=2)
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_ScatterPlots_SigmaClon_Drivers_",sub,".png"),height=10,width=18)
+
+  })
+
+```
+
+
+
+## Broad-sense heritabilities $H^2_{p}$
+
+We calculated population-specific broad-sense heritabilities, such as:
+
+$$ H^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
+
+```{r H2Figures,eval=T}
+param = "h2_prov"
+
+mclapply(traits, function(trait){
+
+p <- ExtractPopSpecificParam(trait) %>% 
+     ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
+  scale_color_manual(values=selected.drivers.colors,
+                     labels=selected.drivers.labels) +
+  xlab("Populations") +
+  ylab(TeX("$\\H^{2}_{p}$ estimates")) +
+  labs(color = "Potential drivers") +
+  theme(legend.position = "bottom",
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=5))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_H2prov_",sub,".png"),height=6,width=22) })
+
+```
+
+ For the discussion, we calculated the mean heritability values of each trait
+ 
+```{r H2means,eval=T}
+param = "h2_prov"
+
+h2means <- mclapply(traits, function(trait){
+
+tab <- ExtractPopSpecificParam(trait)
+
+mean(tab$estimate)
+
+})
+
+names(h2means) <- traits
+h2means
+```
+
+## Variance partitioning
+
+
+```{r VartPartFigs,eval=T}
+param="pi"
+
+mclapply(traits, function(trait){
+
+p <- ExtractParam(trait) %>% 
+  dplyr::filter(Drivers %in% selected.drivers) %>% 
+  mutate(Drivers=case_when(Drivers=="SH.20km.PC1"~"SH1[20km]",
+                      Drivers=="SH.20km.PC2"~"SH2[20km]",
+                      Drivers=="SH.1km.PC1"~"SH1[1.6km]",
+                      Drivers=="SH.1km.PC2"~"SH2[1.6km]",
+                      Drivers=="mean_bio6"~"mean(bio6)",
+                      Drivers=="mean_bio14"~"mean(bio14)",
+                      Drivers=="var_bio6"~"variance(bio6)",
+                      Drivers=="var_bio14"~"variance(bio14)",
+                      TRUE ~ as.character(Drivers)),
+         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),length(selected.drivers))) %>% 
+  mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r"))) %>% 
+  
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
+  scale_color_manual(values=selected.drivers.colors,
+                     labels=selected.drivers.labels) +
+  xlab("") +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Blocks",
+                            "Populations",
+                            "Clones",
+                            "Residuals")) +
+  theme(axis.text = element_text(size=25),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=1))
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_VarPart_",sub,".png"),height=6,width=18)
+
+})
+```
+
+
+```{r VarPartAllHeights,eval=T}
+# Variance partitioning for height only
+#######################################
+
+heights <- str_subset(traits,"ht")
+
+plots <- mclapply(heights, function(trait){
+
+  ExtractParam(trait) %>% 
+  dplyr::filter(Drivers %in% selected.drivers) %>% 
+  mutate(Drivers=case_when(Drivers=="SH.20km.PC1"~"SH1[20km]",
+                      Drivers=="SH.20km.PC2"~"SH2[20km]",
+                      Drivers=="SH.1km.PC1"~"SH1[1.6km]",
+                      Drivers=="SH.1km.PC2"~"SH2[1.6km]",
+                      Drivers=="mean_bio6"~"mean(bio6)",
+                      Drivers=="mean_bio14"~"mean(bio14)",
+                      Drivers=="var_bio6"~"variance(bio6)",
+                      Drivers=="var_bio14"~"variance(bio14)",
+                      TRUE ~ as.character(Drivers)),
+         prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),length(selected.drivers))) %>% 
+  mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r"))) %>% 
+  
+  ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .8),point_size=4,alpha=0.6,size=8) +
+  scale_color_manual(values=selected.drivers.colors,
+                     labels=selected.drivers.labels) +
+  xlab("") +
+  ylim(0,0.9) +
+  ylab("Proportion of variance explained") +
+  labs(color = "Potential drivers") +
+  scale_x_discrete(labels=c("Blocks",
+                            "Populations",
+                            "Clones",
+                            "Residuals"
+                            )) +
+  theme(legend.position = c(.32, .76),
+        legend.text = element_text(size=15,margin = margin(t = 10)),
+        legend.background = element_rect(colour = "grey"),
+        axis.text = element_text(size=22),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank())  +
+    guides(color=guide_legend(ncol=2))
+})
+  
+plots[[2]] <- plots[[2]] + ylab("") + theme(legend.position = "none")
+plots[[3]] <- plots[[3]] + theme(legend.position = "none")
+plots[[4]] <- plots[[4]] + ylab("") + theme(legend.position = "none")
+
+p <- plot_grid(plots[[1]],plots[[2]],plots[[3]],plots[[4]],
+               labels = c('A)','B)',"C)","D)"),
+               label_size = 20 )
+
+ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights_",sub,".png"),height=14,width=17)
+```
+
+## $\mathcal{R}^{2}$
+
+
+```{r RsquaredPosteriors,eval=T}
+params <- c("R_squared","bayes_R2_res","bayes_R2")
+
+for(param in params){
+
+p <- traits %>% 
+  mclapply(ExtractParam) %>% 
+  bind_rows() %>%
+  dplyr::filter(Drivers %in% selected.drivers) %>% 
+  mutate(trait.class=case_when(Traits=="POR_htoct12"~"Height",
+                       Traits=="BDX_htnov13"~"Height",
+                       Traits=="BDX_htnov18"~"Height",
+                       Traits=="AST_htnov12"~"Height",
+                       Traits=="MeanBB"~"Phenology",
+                       Traits=="MeanDBB"~"Phenology",
+                       Traits=="POR_SLA"~"Functional traits",
+                       Traits=="d13C"~"Functional traits"),
+         trait.names=case_when(Traits=="POR_htoct12"~"Fundão 20m",
+                       Traits=="BDX_htnov13"~"Bordeaux 25m",
+                       Traits=="BDX_htnov18"~"Bordeaux 85m",
+                       Traits=="AST_htnov12"~"Asturias 21m",
+                       Traits=="MeanBB"~"MeanBB",
+                       Traits=="MeanDBB"~"MeanDBB",
+                       Traits=="POR_SLA"~"SLA",
+                       Traits=="d13C"~"d13C"),
+         Traits=factor(Traits, levels=traits),
+         Drivers=case_when(Drivers=="SH.20km.PC1"~"SH1[20km]",
+                      Drivers=="SH.20km.PC2"~"SH2[20km]",
+                      Drivers=="SH.1km.PC1"~"SH1[1.6km]",
+                      Drivers=="SH.1km.PC2"~"SH2[1.6km]",
+                      Drivers=="mean_bio6"~"mean(bio6)",
+                      Drivers=="mean_bio14"~"mean(bio14)",
+                      Drivers=="var_bio6"~"variance(bio6)",
+                      Drivers=="var_bio14"~"variance(bio14)",
+                      TRUE ~ as.character(Drivers)),
+         Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
+  ggplot(aes(x = trait.names, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,alpha=0.6) +
+  facet_grid(.~trait.class,scales="free", space = "free") + 
+  ylab(TeX("$R^{2}$")) + 
+  xlab("") +
+  labs(color = "Potential drivers") +
+  scale_color_manual(values=selected.drivers.colors) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size=13),
+        axis.text.y = element_text(size=16),
+        axis.title = element_text(size=16),
+      legend.title=element_text(size=13), 
+      legend.text=element_text(size=10),
+      legend.position = c(.87, .19),
+      legend.background = element_rect(colour = "grey"),
+      strip.text.x = element_text(size = 14),
+      panel.grid.minor.x=element_blank(),
+      panel.grid.major.x=element_blank()) +
+    guides(color=guide_legend(ncol=2))
+  
+  ggsave(p, file=paste0("figs/PosteriorDistributions/ALLTRAITS_",param,"_",sub,".png"),height=7,width=13)
+}
+```
+
+# Correlation btw the number of clones per pop and $\sigma^{2}_{C_{p}}$
+
+```{r CorrealtionNumberClones,eval=T}
+param <- "sigma2_clon"
+
+# Extrating the sigma2_clon (i.e. within-population genetic variation)
+sigma2_clon <- mclapply(traits, ExtractPopSpecificParam) %>% 
+  setNames(traits)
+  
+# Function to extract the number of clones 
+NbClonePerProv <- function(trait){
+
+  df.drivers <- df.drivers %>% 
+    dplyr::select(all_of(c("prov",selected.drivers)))
+  
+  if(trait=="MeanBB"|trait=="MeanDBB"){
+      
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    when(trait=="MeanBB" ~ dplyr::select(.,prov,clon,tree,block,BDX_s32013,BDX_s32014,BDX_s32015,BDX_s32017),
+         ~ dplyr::select(.,prov,clon,tree,block,BDX_dbb2014,BDX_dbb2015,BDX_dbb2017)) %>% 
+    filter(rowSums(is.na(across(where(is.numeric)))) != ncol(.)-4) %>% 
+    dplyr::select(prov,clon) %>% 
+    distinct(.) %>% 
+    group_by(prov) %>% 
+    dplyr::summarise(count=n())
+  
+  } else {
+    
+  df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+    dplyr::filter(!(prov=="MAD")) %>% 
+    dplyr::rename(trait=all_of(trait)) %>% 
+    dplyr::select(prov,clon,tree,block,trait) %>% 
+    drop_na() %>%  
+    dplyr::select(prov,clon) %>% 
+    distinct(.) %>% 
+    group_by(prov) %>% 
+    dplyr::summarise(count=n())
+  
+  }}
+
+# Extracting the number of clones per population
+count <- mclapply(traits,NbClonePerProv) %>% setNames(traits)
+
+df <- mclapply(traits, function(x){
+  mclapply(selected.drivers,function(driver)
+  paste(round(cor(count[[x]]$count,sigma2_clon[[x]]$estimate[sigma2_clon[[x]]$Drivers==driver]),3)," [", # median estimate
+       round(cor(count[[x]]$count,sigma2_clon[[x]]$conf.low[sigma2_clon[[x]]$Drivers==driver]),3),",",   # low 95% CI
+       round(cor(count[[x]]$count,sigma2_clon[[x]]$conf.high[sigma2_clon[[x]]$Drivers==driver]),3),"] ") # high 95% CI
+  ) %>% 
+  setNames(selected.drivers.labels)}) %>% 
+  setNames(traits) %>% 
+  bind_rows(.id="Traits")
+
+# Save as a latex table for the Supplementary Information
+print(xtable(df, type = "latex",digits=3), 
+      file = paste0("tables/Correlation_NbClonesPerProv_Sigma2clon.tex"), 
+      include.rownames=FALSE)
+```
+
+
+# OLD 
+
+
 ### One graph per trait
 
 ```{r BetaXTraitSpecificFigure,eval=T}
-if(sub=="no"){
+if(sub=="alldata"){
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")# order in the model list, do not change
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
@@ -791,7 +1450,7 @@ if(sub=="sub1"){
 ### Other visualizations I tried
 
 ```{r BetaXAllTraitsFigure, eval=F}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","AST_htnov12","BDX_htnov13","BDX_htnov18","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT")    
 param <- "betaX"
@@ -1001,7 +1660,7 @@ p
 ## Total genetic variances $\sigma^{2}_{C_{p}}$
 
 ```{r SigmaClon,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
 
@@ -1201,7 +1860,7 @@ We calculated population-specific broad-sense heritabilities, such as:
 $$ H^2_{p} = \frac{\sigma^{2}_{C_{p}}}{\sigma^{2}_{C_{p}} + \sigma^{2}_r} $$
 
 ```{r H2Figures,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
 
@@ -1253,7 +1912,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_H2prov.png"),height=6,wi
  For the discussion, we calculated the mean heritability values of each trait
  
 ```{r H2means,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
 h2means <- mclapply(traits,function(x){
@@ -1281,7 +1940,7 @@ h2means
 
 
 ```{r VartPartFigs,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 drivers <- c("A","D","EH1[20km]","EH2[20km]","EH1[1.6km]","EH2[1.6km]","SHM","invEMT") 
@@ -1325,7 +1984,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_VarPart.png"),height=6,w
 
 
 ```{r VarPartAllHeights,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12")
 drivers <- c("A","EH1[20km]","EH2[20km]","SHM","invEMT") 
 
@@ -1460,7 +2119,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/VarPart_AllHeights.png"),heigh
 
 
 ```{r RsquaredPosteriors,eval=T}
-for(sub in c("no","sub1","sub2")){
+for(sub in c("alldata","sub1","sub2")){
 
 if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
   traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
@@ -1528,7 +2187,7 @@ ggsave(p, file=paste0("figs/PosteriorDistributions/ALLTRAITS_",param,"_",sub,".p
 # Correlation btw the number of clones per pop and $\sigma^{2}_{C_{p}}$
 
 ```{r CorrealtionNumberClones,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
 provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
@@ -1616,7 +2275,7 @@ df %>% kable(digits=3,"latex")
 # Climatic transfer distances
 
 ```{r FunctionDownloadDataCTD,eval=F}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 
 DownloadDataCTD <- function(trait){
 
@@ -1687,7 +2346,7 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
 ```
 
 ```{r RunningModelsCTD,eval=F}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 
@@ -1724,7 +2383,7 @@ saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 
 
 ```{r FigureCTD, eval=T, fig.height=9,fig.width=9}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 
 CTDbetaX <- readRDS(file=paste0("outputs/models/CTDbetaX.rds"))
 
@@ -2220,7 +2879,7 @@ ggsave(p,file="figs/PosteriorDistributions/IBD_betaX.png",height=9,width=10)
 # Experimental design 
 
 ```{r ExpDesign,eval=T}
-sub="no" # this part was only one on the unfiltered dataset
+sub="alldata" # this part was only one on the unfiltered dataset
 
 traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
 

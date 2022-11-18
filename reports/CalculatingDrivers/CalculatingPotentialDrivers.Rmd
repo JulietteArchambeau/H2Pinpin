@@ -1,5 +1,5 @@
 ---
-title: "Calculating eight potential drivers of the within-population genetic variation"
+title: "Calculating potential drivers of within-population genetic variation"
 author: "Juliette Archambeau"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: 
@@ -69,33 +69,110 @@ library(xtable)
 #options(knitr.table.format = "latex")
 ```
 
-In this document, we calculate eight indexs standing for eight potential drivers of the within-population genetic variation:
 
-  -  **Population admixture** scores $A$ and $D$. $A$ is the raw proportion of admixture for each population (i.e. the proportion of the population genome coming from "foreign" gene pools). $D$ is a the proportion of admixture weighted by the divergence between the source and sink gene pools, i.e. the proportion of belonging to each source gene pool weighted by the divergence between the source and sink gene pool.
+# Goal
+
+In this document, we calculate some indexes used as proxies of potential drivers of the within-population genetic variation: some **population admixture scores**, **climate harshness** indexes, **environmental spatial and temporal heterogeneity** indexes.
+
+## Population admixture scores
+      
+We calculated two indexes, which are both used in the paper.
+      
+ - $A$ is the raw proportion of admixture for each population (i.e. the proportion of the population genome coming from "foreign" gene pools). 
+      
+ - $D$ is a the proportion of admixture weighted by the divergence between the source and sink gene pools, i.e. the proportion of belonging to each source gene pool weighted by the divergence between the source and sink gene pool.
+ 
+
   
-  - **Climate harshness** indexes $SHM$ (summer heat moisture index) and $invEMT$ (the inverse of the extreme minimum temperature over the period 1901-1950).
+## Climate harshness indexes
+
+In the first verion of the paper, the climate harhness indexes were $SHM$ (summer heat moisture index) and $invEMT$ (inverse of the extreme minimum temperatures) and they were extracted from raster files at 1kmx1km spatial resolution (the same as the one used to calculate the spatial enviromnental heterogeneity, see below). However, Maurizio Marchi (the developper of the Climate Downscaling Tool) told us that it is more accurate to extract point-estimate data with the bilinear interpolation of ClimateDT. So, in the reviewed version of the paper (after the second Heredity review), we use climate harshness indexes extracted with ClimateDT.
+
+To obtain the climate harhness indexes, we calculated the mean over of period 1901-1950 of following annual variables:
+
+  - $EMT$ is the **extreme minimum temperature**. For a given year $i$, $EMT_i$ is calculated as follows: $$EMT_i = -18.09776 + 2.140643*tmn01_i +6.834903e-02*tmn01_i^2 + 2.252697e-04*tmn12_i - 4.770242e-02*tmn12_i^2 + 3.062871e-03*TD_i^2$$. To aid vizualisation and interpretation, we use $invEMT$ (the inverse of $EMT$). 
+
+  - $bio6$ is **minimum temperature of the coldest month**
   
-  - **Environmental heterogeneity** indexes. To calculate these indexes, we selected the raster cells in the 20-km radius around the population locations, performed a PCA based on the cell values of the environmental variables (soil, topographic and climatic variables) and extracted the PC1 and PC2 scores for each cell. With that, we calculated different indexes and selected four for the paper:
+  - $MCMT$ is the **mean coldest month temperature**.
   
-    - EH1[20km] the environmental heterogeneity of the **PC1 score** in a **20-km** radius around the population location.
+  - $SHM$ is the **summer heat moisture index**. The higher the $SHM$, the drier the weather.
+  
+  - $bio14$ is the precipitation of the driest month.
+  
+  - $MSP$ is the mean summer precipitation.
+  
+  
+## Environmental spatial heterogeneity indexes
+
+To calculate the environmental spatial heterogeneity indexes, we used climatic, soil and topographic data. 
+
+The climatic data were extracted from raster files at 1kmx1km spatial resolution (kindly provided by Maurizio Marchi), in which each variable was averaged over the period 1901-1950. Here is the list of the climatic variables used:
+
+  - Annual variables 
+
+      - $EMT$: extreme minimum temperature (°C)
+  
+      - $SHM$: summer heat moisture index (°C/mm)
+  
+      - $MSP$: mean summer precipitation (mm) (named $PRCsum$ in the raster files)
+  
+      - $SPR$: mean spring precipitation (mm)
+  
+      - $MWMT$: mean warmest month temperature (°C)
+  
+      - $MCMT$: mean coldest month temperature (°C)
+  
+      - $TD$: temperature difference,	Celsius degrees (°C) ($MWMT-MCMT$)
+
+  - Monthly variables
+
+      - Monthly minimum temperature (°C): $tmn01$ to $tmn12$
+  
+      - Monthly maximum temperature (°C): $tmx01$ to $tmx12$
+  
+      - Monthly total precipitation (mm): $prc01$ to $prc12$
+  
+      - Hargreaves climatic moisture deficit (mm): $CMD_01$ to $CMD_12$
+      
+Soil variables used:
+
+  - $DepthRoots$: Depth available to roots (cm)
+  
+  - $Clay$: Clay content in the topsoil (0-30 cm) (%)
+   
+  - $Sand$: Sand content in the topsoil (0-30 cm) (%)
+   
+  - $Silt$: Silt content in the topsoil (0-30 cm) (%)
+
+The topographic variable used is the topographic ruggedness index (unitless).
+
+To calculate the environmental spatial heterogeneity indexes, we first extracted raster cell values of the climatic, topographic and soil variables within a 20-km radius around each population location, and we kept only raster cells that fell within forested areas, to avoid including environmental data from non-suitable areas (e.g. lakes, mountain peaks). We then performed a principal component analysis (PCA) on the set of the selected raster cells and extracted the PC1 and PC2 scores of each cell, accounting for 45.2% and 34.1% of the variance, respectively. To obtain the four indexes of environmental spatial heterogeneity, we calculated the variances of the PC1 and PC2 scores in a 20-km and 1.6-km radius around each population location:
+  
+  - SH1[20km] the environmental spatial heterogeneity of the **PC1 score** in a **20-km** radius around the population location.
     
-    - EH2[20km] the environmental heterogeneity of the **PC2 score** in a **20-km** radius around the population location.
+  - SH2[20km] the environmental spatial heterogeneity of the **PC2 score** in a **20-km** radius around the population location.
     
-    - EH1[1.6km] the environmental heterogeneity of the **PC1 score** in a **1.6-km** radius around the population location.
+  - SH1[1.6km] the environmental spatial heterogeneity of the **PC1 score** in a **1.6-km** radius around the population location.
     
-    - EH2[1.6km] the environmental heterogeneity of the **PC2 score** in a **1.6-km** radius around the population location.
+  - SH2[1.6km] the environmental spatial heterogeneity of the **PC2 score** in a **1.6-km** radius around the population location.
+    
+
+## Environmental temporal heterogeneity indexes 
+
+The environmntal temporal heterogeneity indexes corresponf to the variance over of period 1901-1950 of the same annual variables as the one used for climate harshness indexes.
 
 
-***
+# Population coordinates
 
-We extract the provenance coordinates, transform them in a spatial object and extract the population structure data.
+We extract the population (i.e. provenance) coordinates, transform them in a spatial object and extract the population structure data.
 
 ```{r DataframeCoordProvPopStructure, message =F}
-# Provenance coordinates
+# Population coordinates
 data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
 df <- unique(data[,c("prov","longitude_prov","latitude_prov")])
 
-# Remove the ROD population because it has no genomic data,
+# We remove the ROD population because it has no genomic data,
 # and the MAD population because it has only one clone (so the genetic variation can't
 # be estimated)
 df <- df[!(df$prov=="ROD"|df$prov=="MAD"),]
@@ -112,36 +189,29 @@ gp <- data[!(is.na(data$Q1)),] %>%
   group_by(prov) %>% 
   summarise_at(vars(paste0(rep("Q",6),1:6)), mean) 
 
-for (i in 1:length(gp$prov)){
-  gp[i,"mainGP"] <- names(gp[i,2:7])[which.max(apply(gp[i,2:7],MARGIN=2,max))]
-  }
+for (i in 1:length(gp$prov)){gp[i,"mainGP"] <- names(gp[i,2:7])[which.max(apply(gp[i,2:7],MARGIN=2,max))]}
 colnames(gp) <- c("prov","gpNA","gpC","gpCS","gpFA","gpIA","gpSES","mainGP")
 
 df <- left_join(df,gp,by="prov")
 ```
 
-```{r CSVforClimateDT, eval=F}
-# We prepare two datasets to extract the climatic variables from the climate downscaling tool
+To extract **point-estimate climatic data** with **ClimateDT**, we have to create a csv file with the provenance coordinates and elevation.
 
-# A first dataset with the original elevation values of the populations
-# Provenance coordinates
+I first created a csv with the initial provenance elevation data, which were provided with the CLONAPIN data. However, for the CAS provenance, there were more than 200m difference between the initial provenance elevetion data (391m) and the elevation data from the DEEM used in ClimateDT (158.43m). 
+
+Looking at the location of the CAS provenance on a map, we considered the DEEM elevation data more plausible because the locations with an elevation of about 300m were quite far from the GPS point of the provenance. Thus, for the CAS provenance, we will use the DEEM elevation data.
+
+```{r CSVforClimateDT, eval=F}
+# Building the csv file for ClimateDT
 provcoord <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
 provcoord <- unique(provcoord[,c("prov","latitude_prov","longitude_prov","altitude_prov")])
 
-# Remove the ROD population because it has no genomic data,
-# and the MAD population because it has only one clone (so the genetic variation can't
-# be estimated)
-provcoord <- provcoord[!(provcoord$prov=="ROD"|provcoord$prov=="MAD"),]
+provcoord <- provcoord[!(provcoord$prov=="ROD"|provcoord$prov=="MAD"),] # removing MAD and ROD
 colnames(provcoord) <- c("prov","longitude","latitude","altitude")
 
-write_csv(provcoord,"data/Climate/Raw/ClimateDTdownloads/InitialElevationData/provenance_coordinates_readyforClimateDT.csv")
+provcoord[provcoord$prov=="CAS","altitude"] <- 158 # we change the elevation data of the CAS provenance
 
-
-
-# A second dataset with the elevation values based on the DEEM values of the climateDT
-provcoord <- read_csv("data/Climate/Raw/ClimateDTdownloads/InitialElevationData/ClimateDT_report.csv") %>% 
-  dplyr::select(ID, Latitude,Longitude,RefElev1kmFORdownscaling) %>% 
-  write_csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/provenance_coordinates_readyforClimateDT.csv")
+write_csv(provcoord,"data/Climate/Raw/ClimateDTdownloads/provenance_coordinates_readyforClimateDT.csv")
 ```
 
 
@@ -396,7 +466,7 @@ df %>%
 
 <span style="color: red;">$A$ and $D_{fst}$ are correlated at `r round(CorADfst,2)` and $D$ and $D_{fst}$ at `r round(CorDDfst,2)`.</span>
 
-# Environmental heterogeneity
+# Spatial heterogeneity
 
 ## Visualization buffer areas + maritime pine distribution
 
@@ -457,7 +527,7 @@ In the article and the rest of the document, we will use the **buffer areas of 2
 
 
 
-# Creating a mask of the forested areas
+## Creating a mask of the forested areas
 
 ```{r VariableUsedForExtentResolutionOfTheMask, eval=F}
 # Load a raster of one variable that will be used to set the resolution and extent of the mask
@@ -734,7 +804,7 @@ dev.off()
   
   - $SHM$: Summer heat moisture index (°C/mm)
   
-  - $PRCsum$: Mean summer precipitation (mm)
+  - $PRCsum$: Mean summer precipitation (mm) ($MSP$ in the manuscript and in ClimateDT)
   
   - $SPR$: Mean spring precipitation (mm)
   
@@ -763,13 +833,13 @@ sapply(tab, function(x) sum(is.na(x))) # no NAs
 
 **Monthly indices (12 variables)**:
 
-  - $MinT_{m}$: Monthly minimum temperature (°C)
+  - Monthly minimum temperature (°C): $tmn01$ to $tmn12$
   
-  - $MaxT_{m}$: Monthly maximum temperature (°C)
+  - Monthly maximum temperature (°C): $tmx01$ to $tmx12$
   
-  - $Prec_{m}$: Monthly total precipitation (mm)
+  - Monthly total precipitation (mm): $prc01$ to $prc12$
   
-  - $CMD_{m}$: Hargreaves climatic moisture deficit (mm)
+  - Hargreaves climatic moisture deficit (mm): $CMD_01$ to $CMD_12$
 
 ```{r ExtractingMonthlyClimaticIndices, eval=F}
 vars <- list.files(path="data/Climate/Raw/FromMaurizio/MonthlyIndices",pattern=".tif")
@@ -863,9 +933,12 @@ tab <- readRDS(file="data/DF_EnvHetero.rds")
 
 pca <- prcomp(tab[,-1], center = TRUE, scale. = TRUE) # centered and scaled PCA
 
-p <- ggbiplot(pca,obs.scale = 1, var.scale = 1, 
-         varname.size =4,alpha = 0.1,#labels.size = 10,
-         varname.adjust = 1.5) + 
+p <- ggbiplot(pca,
+              obs.scale = 1, 
+              var.scale = 1, 
+              varname.size =5,
+              alpha = 0.1,#labels.size = 10,
+              varname.adjust = 1.5) + 
   theme_bw() +
   theme(plot.title = element_text(size=18),
         axis.title = element_text(size=18),
@@ -901,7 +974,7 @@ rast.pc1[tab$cell.num] <- pca$x[,"PC1"]
 rast.pc2[tab$cell.num] <- pca$x[,"PC2"]
 ```
 
-## Calculate EH and EHW
+## Calculate SH and SHW
 
 ```{r ReprojectCRSProvCoord}
 # xyprov is a spatial object of the provenances coordinates in CRS WGS84
@@ -912,15 +985,15 @@ df <- df %>% mutate(long.laea = xyprov@coords[,1],lat.laea = xyprov@coords[,2])
 
 
 
-We first calculate $EH$ for each population as the variance of cell values in the 20-km and 1.6-km radius, such as:
+We first calculate $SH$ for each population as the variance of cell values in the 20-km and 1.6-km radius, such as:
 
-$$ EH = \frac{\sum_{ij}(x_{ij} - \bar{x})^2}{n-1}$$
+$$ SH = \frac{\sum_{ij}(x_{ij} - \bar{x})^2}{n-1}$$
 
 where $i$ and $j$ are the geographical coordinates of the cells being considered, $x_{ij}$ is the value of the PC1 (or PC2) score at cell $[i,j]$, $\bar{x}$ is the weighted mean for the 20-km (or 1.6-km) radius region.
 
 ### 20-km radius
 
-```{r CalculateEH}
+```{r CalculateSH}
 # We are going to extract the cell values of the cells in the 20-km radius around the population location
 
 # For PC1
@@ -938,20 +1011,20 @@ df[,"Nb.val.20km"] <- unlist(lapply(pop.val1, function(x) sum(!is.na(x[,"value"]
 df[,"Nb.cell.20km"] <- df[,"Nb.NAs.20km"] + df[,"Nb.val.20km"]  # total number of cells
 
 # Environmental heterogeneity index (variance of the values of the cells within the 20-km radius)
-df[,"EH.20km.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
-df[,"EH.20km.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
+df[,"SH.20km.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
+df[,"SH.20km.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
 ```
 
 
 Comment: Here, we extracted the cells within a 20 km radius around the population location with the `extract` function, i.e. thus selecting the cells that have their center within the 20 km radius around the population location. In a different way, when the mask was constructed, the cells were selected in a buffer zone around the population location with the `buffer` function, so that cells were included if part of the cell was included in the 20 km radius, which results in a larger number of selected cells.
 
-We calculate $EHW$ for each population as the weighted variance of cell values in the 20-km radius region, such as:
+We calculate $SHW$ for each population as the weighted variance of cell values in the 20-km radius region, such as:
 
-$$ EHW =  \frac{\sum_{ij}(x_{ij}-\bar{x})^{2}m_{ij}}{\sum_{ij}m_{ij}}  $$
+$$ SHW =  \frac{\sum_{ij}(x_{ij}-\bar{x})^{2}m_{ij}}{\sum_{ij}m_{ij}}  $$
 
 where $m_{ij}$ is the weighting at cell $[i,j]$.
 
-```{r ParametersEHW, fig.height=6,fig.width=8}
+```{r ParametersSHW, fig.height=6,fig.width=8}
 # parameters from De Lucas et al., 2008
 c <- 0.2229 # shape parameter
 alpha <- 0.0028 # scale parameter
@@ -977,7 +1050,7 @@ plot(weight,
 
 The weights are almost zero at a distance of more than 100 m.
 
-```{r CalculateEHW}
+```{r CalculateSHW}
 calcWeights <- function(x,pop.nb,rast){
   coords <-  xyFromCell(rast,x[,1])
   coord.x = coords[,1]
@@ -1013,13 +1086,13 @@ calcWeights <- function(x,pop.nb,rast){
 
 pop.val1 <-mapply(calcWeights, pop.val1,pop.nb=1:33,MoreArgs=list(rast=rast.pc1), SIMPLIFY=F)
 pop.val2 <-mapply(calcWeights, pop.val2,pop.nb=1:33,MoreArgs=list(rast=rast.pc2), SIMPLIFY=F)
-# For EH (already done before): 
-#df[,"EH"] <- unlist(lapply(pop.val, function(x) var(x$value)))
-# df[,"EH"] <- unlist(lapply(pop.val, function(x) sum((x$value-mean(x$value))^2)/(length(x$cell)-1)))
+# For SH (already done before): 
+#df[,"SH"] <- unlist(lapply(pop.val, function(x) var(x$value)))
+# df[,"SH"] <- unlist(lapply(pop.val, function(x) sum((x$value-mean(x$value))^2)/(length(x$cell)-1)))
 
-# Calculation EHW
-df[,"EHW.20km.PC1"] <- unlist(lapply(pop.val1, function(x) sum(((x$value-mean(x$value))^2)*x$weight)/sum(x$weight)))
-df[,"EHW.20km.PC2"] <- unlist(lapply(pop.val2, function(x) sum(((x$value-mean(x$value))^2)*x$weight)/sum(x$weight)))
+# Calculation SHW
+df[,"SHW.20km.PC1"] <- unlist(lapply(pop.val1, function(x) sum(((x$value-mean(x$value))^2)*x$weight)/sum(x$weight)))
+df[,"SHW.20km.PC2"] <- unlist(lapply(pop.val2, function(x) sum(((x$value-mean(x$value))^2)*x$weight)/sum(x$weight)))
 
 df[,"minDist"] <- unlist(lapply(pop.val1, function(x) min(x$dist)))
 df[,"meanDist"] <- unlist(lapply(pop.val1, function(x) mean(x$dist,na.rm=T)))
@@ -1232,8 +1305,8 @@ df[,"Nb.val.1km"] <- unlist(lapply(pop.val1, function(x) sum(!is.na(x[,"value"])
 df[,"Nb.cell.1km"] <- df[,"Nb.NAs.1km"] + df[,"Nb.val.1km"]  # total number of cells
 
 # Environmental heterogeneity index (variance of the values of the cells within the 1.6-km radius)
-df[,"EH.1km.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
-df[,"EH.1km.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
+df[,"SH.1km.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
+df[,"SH.1km.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
 
 df %>% 
   dplyr::select(contains("1km")) %>%
@@ -1306,8 +1379,8 @@ df[,"Nb.val.9cells"] <- unlist(lapply(pop.val1, function(x) sum(!is.na(x[,"value
 df[,"Nb.cell.9cells"] <- df[,"Nb.NAs.1km"] + df[,"Nb.val.1km"]  # total number of cells
 
 # Environmental heterogeneity index (variance of the values of the cells within the 1.6-km radius)
-df[,"EH.9cells.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
-df[,"EH.9cells.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
+df[,"SH.9cells.PC1"] <- unlist(lapply(pop.val1, function(x) var(x[,"value"],na.rm=T))) # PC1 score   
+df[,"SH.9cells.PC2"] <- unlist(lapply(pop.val2, function(x) var(x[,"value"],na.rm=T))) # PC2 score
 
 df %>% 
   dplyr::select(contains("9cells")) %>%
@@ -1319,13 +1392,13 @@ df %>%
 
 <span style="color: red;">Here is the correspondence between the variable names in this document and the variable names in the paper:</span>
 
-  - <span style="color: red;">`EH.20km.PC1` => **EH1[20km]**</span>
+  - <span style="color: red;">`SH.20km.PC1` => **SH1[20km]**</span>
   
-  - <span style="color: red;">`EH.20km.PC2` => **EH2[20km]**</span>
+  - <span style="color: red;">`SH.20km.PC2` => **SH2[20km]**</span>
 
-  - <span style="color: red;">`EH.1.6km.PC1` => **EH1[1.6km]**</span>
+  - <span style="color: red;">`SH.1.6km.PC1` => **SH1[1.6km]**</span>
   
-  - <span style="color: red;">`EH.1km.PC2` => **EH2[1.6km]**</span>
+  - <span style="color: red;">`SH.1km.PC2` => **SH2[1.6km]**</span>
 
 
 ## Visualization
@@ -1334,19 +1407,19 @@ df %>%
 # I don't know why, leaflet doesn't represent well the raster cells within the 20-km and 1.6-km radius,
 # so I stopped using it for visualization
 # probably a problem of projection
-labels <- sprintf("<strong> %s </strong><br/>Northern Africa: %s <br/>Corsica: %s <br/>Central Spain: %s <br/>French Atlantic: %s <br/>Iberian Atlantic: %s <br/>South-eastern Spain: %s <br/>EH PC1 20-km: %s <br/>EHW PC1 20-km: %s <br/>EH PC2 20-km: %s <br/>EHW PC2 20-km: %s <br/>EH PC1 1.6-km: %s <br/>EH PC2 1.6-km: %s",
+labels <- sprintf("<strong> %s </strong><br/>Northern Africa: %s <br/>Corsica: %s <br/>Central Spain: %s <br/>French Atlantic: %s <br/>Iberian Atlantic: %s <br/>South-eastern Spain: %s <br/>SH PC1 20-km: %s <br/>SHW PC1 20-km: %s <br/>SH PC2 20-km: %s <br/>SHW PC2 20-km: %s <br/>SH PC1 1.6-km: %s <br/>SH PC2 1.6-km: %s",
                   df$prov,round(df$gpNA,2), 
                   round(df$gpC,2),
                   round(df$gpCS,2),
                   round(df$gpFA,2),
                   round(df$gpIA,2),
                   round(df$gpSES,2),
-                  round(df$EH.20km.PC1,2),
-                  round(df$EHW.20km.PC1,2),
-                  round(df$EH.20km.PC2,2),
-                  round(df$EHW.20km.PC2,2),
-                  round(df$EH.1km.PC1,2),
-                  round(df$EH.1km.PC2,2)) %>%
+                  round(df$SH.20km.PC1,2),
+                  round(df$SHW.20km.PC1,2),
+                  round(df$SH.20km.PC2,2),
+                  round(df$SHW.20km.PC2,2),
+                  round(df$SH.1km.PC1,2),
+                  round(df$SH.1km.PC2,2)) %>%
   lapply(htmltools::HTML)
 labelsOnlyProv <- sprintf("<strong> %s </strong><br/>",
                   df$prov) %>%
@@ -1368,20 +1441,20 @@ leaflet() %>%
 Correlations among the environmental heterogeneity indexes:
 
 ```{r CorEnvHeteroIndexes, echo=F}
-df %>% dplyr::select(contains("EH")) %>% cor() %>% 
+df %>% dplyr::select(contains("SH")) %>% cor() %>% 
   kable(digits=3) %>%
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 ```
 
-At 20-km radius, weak correlation between $EH$ and $EHW$ and the number of no-NA and NA cells:
+At 20-km radius, weak correlation between $SH$ and $SHW$ and the number of no-NA and NA cells:
 
 ```{r CorEnvHeteroNbCells20km, echo=F}
 df %>% dplyr::select(contains("20")) %>% 
   cor() %>% 
   as.data.frame() %>% 
-  dplyr::select(EH.20km.PC1,EH.20km.PC2,EHW.20km.PC1,EHW.20km.PC2) %>% 
+  dplyr::select(SH.20km.PC1,SH.20km.PC2,SHW.20km.PC1,SHW.20km.PC2) %>% 
   slice(1:3) %>% 
   kable(digits=3) %>%
   kable_styling(font_size=11,
@@ -1389,13 +1462,13 @@ df %>% dplyr::select(contains("20")) %>%
   column_spec(1, bold = T)
 ```
 
-At 1.6-km radius, very weak correlation between $EH$ and $EHW$ and the number of no-NA and NA cells:
+At 1.6-km radius, very weak correlation between $SH$ and $SHW$ and the number of no-NA and NA cells:
 
 ```{r CorEnvHeteroNbCells1km, echo=F}
 df %>% dplyr::select(contains("1km")) %>% 
   cor() %>% 
   as.data.frame() %>% 
-  dplyr::select(EH.1km.PC1,EH.1km.PC2) %>% 
+  dplyr::select(SH.1km.PC1,SH.1km.PC2) %>% 
   slice(1:3) %>% 
   kable(digits=3) %>%
   kable_styling(font_size=11,
@@ -1404,23 +1477,23 @@ df %>% dplyr::select(contains("1km")) %>%
 ```
 
      
-$EH$ at 20-km radius has plausible outputs, while $EHW$ has highly implausible values. See table below the provenance sorted by $EH$ values:
+$SH$ at 20-km radius has plausible outputs, while $SHW$ has highly implausible values. See table below the provenance sorted by $SH$ values:
 
-```{r SortEH20km, echo=F}
+```{r SortSH20km, echo=F}
 df %>% 
-  dplyr::select(prov,EH.20km.PC1,EH.20km.PC2,EHW.20km.PC1,EHW.20km.PC2,EH.1km.PC1,EH.1km.PC2,EH.9cells.PC1,EH.9cells.PC2) %>% 
-  arrange(by=EH.20km.PC1) %>% 
+  dplyr::select(prov,SH.20km.PC1,SH.20km.PC2,SHW.20km.PC1,SHW.20km.PC2,SH.1km.PC1,SH.1km.PC2,SH.9cells.PC1,SH.9cells.PC2) %>% 
+  arrange(by=SH.20km.PC1) %>% 
   kable() %>%
   kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 ```
 
-Same table but sorted by $EH$ at 1.6-km radius:
+Same table but sorted by $SH$ at 1.6-km radius:
 
-```{r SortEH1km, echo=F}
+```{r SortSH1km, echo=F}
 df %>% 
-  dplyr::select(prov,EH.20km.PC1,EH.20km.PC2,EHW.20km.PC1,EHW.20km.PC2,EH.1km.PC1,EH.1km.PC2,EH.9cells.PC1,EH.9cells.PC2) %>% 
-  arrange(by=EH.1km.PC1) %>% 
+  dplyr::select(prov,SH.20km.PC1,SH.20km.PC2,SHW.20km.PC1,SHW.20km.PC2,SH.1km.PC1,SH.1km.PC2,SH.9cells.PC1,SH.9cells.PC2) %>% 
+  arrange(by=SH.1km.PC1) %>% 
   kable() %>%
   kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
@@ -1435,36 +1508,38 @@ df %>%
 df[,"VarDist"] <- unlist(lapply(pop.val1, function(x) var(x$dist)))
 df[,"MeanDist"] <- unlist(lapply(pop.val1, function(x) mean(x$dist)))
 df[,"MeanValue"] <- unlist(lapply(pop.val1, function(x) mean(x$value)))
-df[,"DenominatorEHW"] <- unlist(lapply(pop.val1, function(x) sum(x$weight)))
-df[,"NumeratorEHW"] <- unlist(lapply(pop.val1, function(x) sum(((x$value-mean(x$value))^2)*x$weight)))
+df[,"DenominatorSHW"] <- unlist(lapply(pop.val1, function(x) sum(x$weight)))
+df[,"NumeratorSHW"] <- unlist(lapply(pop.val1, function(x) sum(((x$value-mean(x$value))^2)*x$weight)))
 
 
 # Correlations
-corEHWVarDist <- cor(df[,"EHW"],df[,"VarDist"])
-corEHWMeanDist <- cor(df[,"EHW"],df[,"MeanDist"])
-corEHWMeanValue <- cor(df[,"EHW"],df[,"MeanValue"])
-corEHWDenominator <- cor(df[,"EHW"],df[,"DenominatorEHW"])
-corEHWVNumerator <- cor(df[,"EHW"],df[,"NumeratorEHW"])
+corSHWVarDist <- cor(df[,"SHW"],df[,"VarDist"])
+corSHWMeanDist <- cor(df[,"SHW"],df[,"MeanDist"])
+corSHWMeanValue <- cor(df[,"SHW"],df[,"MeanValue"])
+corSHWDenominator <- cor(df[,"SHW"],df[,"DenominatorSHW"])
+corSHWVNumerator <- cor(df[,"SHW"],df[,"NumeratorSHW"])
 
-  # - $EHW$ has very weird outputs. For instance, for Corsican provenances, PIA provenance has a high $EHW$ value whereas the adjacent cells to the population location have similar values than the cell of the population location, and the PIE provenance has a low $EHW$ value whereas the adjacent cells have slightly different values than that of the population location. No correlation can explained these strange outputs:
+  # - $SHW$ has very weird outputs. For instance, for Corsican provenances, PIA provenance has a high $SHW$ value whereas the adjacent cells to the population location have similar values than the cell of the population location, and the PIE provenance has a low $SHW$ value whereas the adjacent cells have slightly different values than that of the population location. No correlation can explained these strange outputs:
   # 
-  #   - correlations between $EHW$ and mean and variance of the distances between the population location and the other cells of the 20-km radius: $\rho =$ `r corEHWMeanDist` and $\rho =$ `r corEHWVarDist`.
+  #   - correlations between $SHW$ and mean and variance of the distances between the population location and the other cells of the 20-km radius: $\rho =$ `r corSHWMeanDist` and $\rho =$ `r corSHWVarDist`.
   # 
-  #   - correlation between $EHW$ and the mean of the cell values in the 20-km radius: $\rho =$ `r corEHWMeanValue`.
+  #   - correlation between $SHW$ and the mean of the cell values in the 20-km radius: $\rho =$ `r corSHWMeanValue`.
   # 
-  #   - correlation between $EHW$ and the numerator and denominator of $EHW$: $\rho =$ `r corEHWVNumerator` and $\rho =$ `r corEHWDenominator`.
+  #   - correlation between $SHW$ and the numerator and denominator of $SHW$: $\rho =$ `r corSHWVNumerator` and $\rho =$ `r corSHWDenominator`.
 ```
 
-<span style="color: red;">In the following analyses, we are going to use $EH$ at 20-km radius for both PC1 and PC2 scores (**EH1[20km]** and **EH2[20km]**) and $EH$ at 1.6-km radius for both PC1 and PC2 too (**EH1[1.6km]** and **EH2[1.6km]**).</span>
+<span style="color: red;">In the following analyses, we are going to use $SH$ at 20-km radius for both PC1 and PC2 scores (**SH1[20km]** and **SH2[20km]**) and $SH$ at 1.6-km radius for both PC1 and PC2 too (**SH1[1.6km]** and **SH2[1.6km]**).</span>
 
 
 # Climate harshness
 
-## Summer heat moisture index
+We initially extracted $SHM$ and $EMT$ values from the same raster files used to calculate the spatial environmnental heterogeneity. As the raster files have a 1kmx1km spatial resolution, the extraction from the raster files is less accurate than extracting point-estimate climatic data with ClimateDT (bilinear interpolation). 
 
-The higher the $SHM$, the drier the weather.
+So, following the second review in Heredity, we used the extracted $SHM$ and $EMT$ values from ClimateDT rather than those extracted from the 1km*1km raster files. 
 
-```{r ExtractSHM}
+```{r ExtractSHMfromRasters,eval=F}
+# Extracting SHM
+################
 var <- "SHM"
 rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",var,".tif"))
 df[,var] <- extract(rast.var, xyprov) #
@@ -1474,15 +1549,9 @@ df %>%
   kable() %>%
   kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
-```
 
-The mean summer heat moisture index across populations is `r df$SHM %>% mean() %>% round(2)` °C/mm. 
-
-## Extreme minimum temperature
-
-$EMT$: the extreme minimum temperature over the period considered (1901-1950). For intepretation, we are going to use $invEMT$ ($=-EMT$).
-
-```{r ExtractEMT}
+# Extracting EMT
+################
 var <- "EMT"
 rast.var <- raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/",var,".tif"))
 df[,var] <- extract(rast.var, xyprov) # EMT
@@ -1495,93 +1564,43 @@ df %>%
   column_spec(1, bold = T)
 ```
 
-The mean extreme minimum temperature across populations is `r df$EMT %>% mean() %>% round(2)` °C. 
 
-
-## New indices of climate harshness after review
-
-```{r}
-climDTinit <- read.csv("data/Climate/Raw/ClimateDTdownloads/InitialElevationData/ClimateDT_outputs.csv") %>% 
+```{r ClimateHarshnessIndexes}
+climDT <- read.csv("data/Climate/Raw/ClimateDTdownloads/ClimateDT_outputs.csv") %>% 
   group_by(ID) %>% 
-  dplyr::summarise(mean_bio6=mean(bio6),
-            mean_SHM=mean(SHM),
-            mean_EMT=mean(EMT),
-            min_bio6=min(bio6),
-            max_SHM=max(SHM),
-            min_EMT=min(EMT),
-            var_bio6=var(bio6),
-            var_SHM=var(SHM),
-            var_EMT=var(EMT)) %>% 
-  dplyr::rename(prov=ID) %>% 
-  merge(df[,c("prov","EMT","SHM")],by="prov")
+  dplyr::summarise(mean_bio6=mean(bio6),   # minimum temperature of the coldest month
+                   mean_MCMT=mean(MCMT),   # mean coldest month temperature 
+                   mean_EMT=mean(EMT),     # extreme minimum temperature
+                   mean_bio14=mean(bio14), # precipitation of the driest month
+                   mean_SHM=mean(SHM),     # summer heat moisture index
+                   mean_MSP=mean(MSP),     # mean summer precipitation
+                   
+                   var_bio6=var(bio6),
+                   var_MCMT=var(MCMT),
+                   var_EMT=var(EMT),
+                   var_bio14=var(bio14),
+                   var_SHM=var(SHM),
+                   var_MSP=var(MSP)) %>% 
+  dplyr::rename(prov=ID)
 
-# vizualisation
-climDTinit %>% pairs.panels(scale=T,hist.col="palegreen1")
+# Vizualisation of the correlation among variables
+climDT %>% pairs.panels(scale=T,hist.col="palegreen1")
+
+# add to df
+df <- df %>%  merge(climDT,by="prov")
 ```
 
 
-```{r}
-climDTdeem <- read.csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/ClimateDT_outputs.csv") %>% 
-  group_by(ID) %>% 
-  dplyr::summarise(mean_bio6=mean(bio6),
-            mean_SHM=mean(SHM),
-            mean_EMT=mean(EMT),
-            min_bio6=min(bio6),
-            max_SHM=max(SHM),
-            min_EMT=min(EMT),
-            var_bio6=var(bio6),
-            var_SHM=var(SHM),
-            var_EMT=var(EMT)) %>% 
-  dplyr::rename(prov=ID) %>% 
-  merge(df[,c("prov","EMT","SHM")],by="prov")
-
-# vizualisation
-climDTdeem %>% pairs.panels(scale=T,hist.col="palegreen1")
-
-climDTinit[climDTinit$prov=="CAS",] <- climDTdeem[climDTdeem$prov=="CAS",]
-
-climDTinit <- climDTinit %>% 
-  mutate(
-  mean_invbio6 = mean_bio6 * (-1),
-  min_invbio6 = min_bio6 * (-1))
-
-saveRDS(climDTinit,file="data/DF_NewDriversAfterReview.rds")
-```
-
-
-```{r}
-dfmaurizio <- read.csv("data/Climate/Raw/ClimateDTdownloads/DEEMElevationData/ClimateDT_report.csv") %>% 
-  dplyr::select(ID,Latitude,Longitude,Elevation,RefElev1kmFORdownscaling) %>% 
-  dplyr::rename(prov=ID,
-                Elevation_original=Elevation,
-                Elevation_DEEM=RefElev1kmFORdownscaling) %>% 
-  merge(climDTinit[,c("prov","EMT","min_EMT","mean_EMT","SHM","mean_SHM")],by="prov") %>% 
-  dplyr::rename(EMT_rast2021=EMT,
-                minEMT_ext2022=min_EMT,
-                meanEMT_rast2021=mean_EMT,
-                SHM_rast2021=SHM,
-                SHM_ext2022=mean_SHM) %>% 
-  write_csv("data/Climate/Raw/ClimateDTdownloads/ClimaticVariables.csv")
-```
-
-
-# Save table for Supp Info
-
-```{r TableSuppInfoDriverValues}
-df.suppinfo <- df %>% 
-  dplyr::select(prov, SHM, invEMT, EH.20km.PC1,EH.20km.PC2, EH.1km.PC1,EH.1km.PC2,Nb.val.20km,Nb.val.1km)
-  
-
-print(xtable(df.suppinfo, type = "latex",digits=2),
-      file = "tables/Drivers/ClimaticDriversValues.tex",
-      include.rownames=FALSE)
-```
 
 # Climatic transfer distances
 
-Site coordinates:
+## Site coordinates
 
-```{r ExtractSiteCoordinates}
+
+```{r ExtractSiteCoordinatesBeforeHeredityReview, eval=F}
+# Script used before the second Heredity review,
+# when EMT and SHM values were extracted from raster files
+
 df.site <- unique(data[,c("site","longitude_site","latitude_site")])
 
 # Create a spatial object
@@ -1602,6 +1621,28 @@ df.site  %>%
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 ```
+
+
+```{r}
+# Site coordinates for ClimateDT
+df.site <- unique(data[,c("site","latitude_site","longitude_site")]) %>% # !!!! latitude and longitude were inverted!
+  setNames(c("site","longitude","latitude"))
+
+# We add the elevation data from the DEEM of ClimateDT
+df.site$elevation[df.site$site=="asturias"] <- 449
+df.site$elevation[df.site$site=="bordeaux"] <- 58
+df.site$elevation[df.site$site=="portugal"] <- 865
+
+write_csv(df.site,"data/Climate/Raw/ClimateDTdownloads/site_coordinates_readyforClimateDT.csv")
+```
+
+Trees were planted in 2011: 02/2011 for Asturias and Fundão and 10/2011 for Bordeaux.
+Trees were measured in October 2012 in Fundão (when trees were 20 months old). 
+Trees were measured in November 2012 in Asturias (when the trees were 21 months old).
+Trees were measured in November 2013  in Bordeaux (when the trees were 25 months old) and in November 2018 (when the trees were 85 months old).
+
+So we are going to take what??
+
 
 Create the columns with the climatic transfer distances:
 
@@ -1631,14 +1672,29 @@ df %>%
   column_spec(1, bold = T)
 ```
 
+# Export drivers and save table for Supp Info
+
+```{r SaveDF}
+saveRDS(df,file="data/DF_Drivers.rds")
+```
+
+```{r TableSuppInfoDriverValues}
+df.suppinfo <- df %>% 
+  dplyr::select(prov, SH.20km.PC1,SH.20km.PC2, SH.1km.PC1,SH.1km.PC2,Nb.val.20km,Nb.val.1km) # Add temporal heterogeneity indexes + climate harshness indexes here ! 
+  
+
+print(xtable(df.suppinfo, type = "latex",digits=2),
+      file = "tables/Drivers/ClimaticDriversValues.tex",
+      include.rownames=FALSE)
+```
 
 # Correlations 
 
 Correlations among the potential drivers:
 
 ```{r CorrelationsAllDrivers}
-df %>% dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
-                     EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+df %>% dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
+                     SH.1km.PC1,SH.1km.PC2,SHM,invEMT) %>% 
   cor() %>% 
   lower.triangle() %>% 
   kable(digits=3) %>%
@@ -1652,8 +1708,8 @@ df %>% dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
 # Here the code to get the latex code of the table
 options(knitr.table.format = "latex")
 df %>% 
-  dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
-                     EH.1km.PC1,EH.1km.PC2,SHM,invEMT) %>% 
+  dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
+                     SH.1km.PC1,SH.1km.PC2,SHM,invEMT) %>% 
   cor() %>% 
   lower.triangle() %>% 
   kable(digits=3,"latex") %>% 
@@ -1668,8 +1724,8 @@ readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>%
   dplyr::select(prov,altitude_prov) %>% 
   distinct() %>% 
   inner_join(df,by="prov") %>% 
-  dplyr::select(A,D,EH.20km.PC1,EH.20km.PC2,
-                EH.1km.PC1,EH.1km.PC2,SHM,invEMT,altitude_prov) %>% 
+  dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
+                SH.1km.PC1,SH.1km.PC2,SHM,invEMT,altitude_prov) %>% 
   cor() %>% 
   upper.triangle() %>% 
   as.data.frame() %>% 
@@ -1679,9 +1735,7 @@ readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>%
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F)
 ```
 
-```{r SaveDF}
-saveRDS(df,file="data/DF_Drivers.rds")
-```
+
 
 # Bibliography
 
