@@ -1623,7 +1623,7 @@ df.site  %>%
 ```
 
 
-```{r}
+```{r CSVwithSiteCoordinatesforClimateDT}
 # Site coordinates for ClimateDT
 df.site <- unique(data[,c("site","latitude_site","longitude_site")]) %>% # !!!! latitude and longitude were inverted!
   setNames(c("site","longitude","latitude"))
@@ -1637,33 +1637,71 @@ write_csv(df.site,"data/Climate/Raw/ClimateDTdownloads/site_coordinates_readyfor
 ```
 
 Trees were planted in 2011: 02/2011 for Asturias and Fundão and 10/2011 for Bordeaux.
-Trees were measured in October 2012 in Fundão (when trees were 20 months old). 
-Trees were measured in November 2012 in Asturias (when the trees were 21 months old).
-Trees were measured in November 2013  in Bordeaux (when the trees were 25 months old) and in November 2018 (when the trees were 85 months old).
 
-So we are going to take what??
+For **height**: 
+  
+  - trees were measured in October 2012 in Fundão (when trees were 20 months old). 
 
+  - trees were measured in November 2012 in Asturias (when the trees were 21 months old).
+  
+  - trees were measured in November 2013  in Bordeaux (when the trees were 25 months old) and in November 2018 (when the trees were 85 months old).
 
-Create the columns with the climatic transfer distances:
+**Phenology traits** were measured in 2013, 2014, 2015 and 2017 for the mean bud burst date and 2014, 2015 and 2017 for the duration of bud burst.
+
+We do not know when the **functional traits** were measured in Portugal  (the most likely being that they were measured at the same time as height), so we are going to take the years 2011 and 2012 for the calculation of the climate in the common garden. 
+
+We now add in `df` some columns for the climatic transfer distances.
 
 ```{r CreateColumnsCTD}
+df.site <- read.csv("data/Climate/Raw/ClimateDTdownloads/ClimateDT_outputs_sites.csv")
+
+# Height (Asturias, 21 months)
+bio6_height_asturias <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="asturias","bio6"]) # mean across 2011 and 2012 
+bio14_height_asturias <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="asturias","bio14"]) # mean across 2011 and 2012 
+
+# Height (Fundão, 20 months) + SLA + d13C
+bio6_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","bio6"]) # mean across 2011 and 2012 
+bio14_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","bio14"]) # mean across 2011 and 2012                         
+
+# Height (Bordeaux, 25 months)
+bio6_height_bordeaux25 <- mean(df.site[df.site$Year %in% 2011:2013 & df.site$ID=="bordeaux","bio6"]) # mean across 2011, 2012 and 2013
+bio14_height_bordeaux25 <- mean(df.site[df.site$Year %in% 2012:2013 & df.site$ID=="bordeaux","bio14"]) # mean across 2012 and 2013 (were not planted during the 2011 summer)                       
+# Height (Bordeaux, 85 months)
+bio6_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2011:2018 & df.site$ID=="bordeaux","bio6"]) # mean from 2011 to 2018
+bio14_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2012:2018 & df.site$ID=="bordeaux","bio14"]) # mean from 2011 to 2018
+
+# Mean bud burst date (Bordeaux)
+bio6_meanBB_bordeaux <- mean(df.site[df.site$Year %in% c(2013:2015,2017) & df.site$ID=="bordeaux","bio6"]) # mean across years 2013, 2014, 2015 and 2017
+bio14_meanBB_bordeaux <- mean(df.site[df.site$Year %in% c(2013:2015,2017) & df.site$ID=="bordeaux","bio14"]) # same
+
+# Mean duration of bud burst (Bordeaux)
+bio6_meanDBB_bordeaux <- mean(df.site[df.site$Year %in% c(2014:2015,2017) & df.site$ID=="bordeaux","bio6"]) #  mean across years 2014, 2015 and 2017
+bio14_meanDBB_bordeaux <- mean(df.site[df.site$Year %in% c(2014:2015,2017) & df.site$ID=="bordeaux","bio14"]) # same
+
+
 df <- df %>% 
-  dplyr::mutate(CTD_asturias_EMT=(EMT-df.site[df.site$site=="asturias","EMT_site"] %>% pull()) %>% abs(),
-                CTD_asturias_SHM=(SHM-df.site[df.site$site=="asturias","SHM_site"] %>% pull()) %>% abs(),
-                CTD_bordeaux_EMT=(EMT-df.site[df.site$site=="bordeaux","EMT_site"] %>% pull()) %>% abs(),
-                CTD_bordeaux_SHM=(SHM-df.site[df.site$site=="bordeaux","SHM_site"] %>% pull()) %>% abs(),
-                CTD_portugal_EMT=(EMT-df.site[df.site$site=="portugal","EMT_site"] %>% pull()) %>% abs(),
-                CTD_portugal_SHM=(SHM-df.site[df.site$site=="portugal","SHM_site"] %>% pull()) %>% abs())
+  dplyr::mutate(CTD_bio6_height_asturias=(mean_bio6-bio6_height_asturias) %>% abs(),
+                CTD_bio14_height_asturias=(mean_bio14-bio14_height_asturias) %>% abs(),
+                CTD_bio6_height_SLA_d13C_portugal=(mean_bio6-bio6_height_SLA_d13C_portugal) %>% abs(),
+                CTD_bio14_height_SLA_d13C_portugal=(mean_bio14-bio14_height_SLA_d13C_portugal) %>% abs(),
+                CTD_bio6_height_bordeaux25=(mean_bio6-bio6_height_bordeaux25) %>% abs(),
+                CTD_bio14_height_bordeaux25=(mean_bio14-bio14_height_bordeaux25) %>% abs(),
+                CTD_bio6_height_bordeaux85=(mean_bio6-bio6_height_bordeaux85) %>% abs(),
+                CTD_bio14_height_bordeaux85=(mean_bio14-bio14_height_bordeaux85) %>% abs(),
+                CTD_bio6_meanBB_bordeaux=(mean_bio6-bio6_meanBB_bordeaux) %>% abs(),
+                CTD_bio14_meanBB_bordeaux=(mean_bio14-bio14_meanBB_bordeaux) %>% abs(),
+                CTD_bio6_meanDBB_bordeaux=(mean_bio6-bio6_meanDBB_bordeaux) %>% abs(),
+                CTD_bio14_meanDBB_bordeaux=(mean_bio14-bio14_meanDBB_bordeaux) %>% abs())
+                
 
 df %>% 
   dplyr::select(prov,contains("CTD")) %>% 
-  arrange(by=CTD_asturias_EMT) %>% 
   kable(digits=2) %>%
   kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 
 df %>% 
-  dplyr::select(contains("EMT"),contains("SHM"),-EMT) %>% 
+  dplyr::select(contains("bio6"),contains("bio14")) %>% 
   cor() %>% 
   lower.triangle() %>%
   kable(digits=3) %>%
@@ -1694,7 +1732,7 @@ Correlations among the potential drivers:
 
 ```{r CorrelationsAllDrivers}
 df %>% dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
-                     SH.1km.PC1,SH.1km.PC2,SHM,invEMT) %>% 
+                     SH.1km.PC1,SH.1km.PC2,mean_bio6,mean_bio14,var_bio6,var_bio14) %>% 
   cor() %>% 
   lower.triangle() %>% 
   kable(digits=3) %>%
@@ -1709,7 +1747,7 @@ df %>% dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
 options(knitr.table.format = "latex")
 df %>% 
   dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
-                     SH.1km.PC1,SH.1km.PC2,SHM,invEMT) %>% 
+                     SH.1km.PC1,SH.1km.PC2,mean_bio6,mean_bio14,var_bio6,var_bio14) %>% 
   cor() %>% 
   lower.triangle() %>% 
   kable(digits=3,"latex") %>% 
@@ -1725,11 +1763,15 @@ readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>%
   distinct() %>% 
   inner_join(df,by="prov") %>% 
   dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
-                SH.1km.PC1,SH.1km.PC2,SHM,invEMT,altitude_prov) %>% 
+                SH.1km.PC1,SH.1km.PC2,contains("bio6"),(contains("bio14")),altitude_prov) %>% 
   cor() %>% 
   upper.triangle() %>% 
   as.data.frame() %>% 
-  dplyr::select(altitude_prov) %>% 
+  rownames_to_column(var="Variable") %>% 
+  dplyr::select(Variable,altitude_prov) %>% 
+  arrange(desc(abs(altitude_prov))) %>% 
+  dplyr::filter(!Variable=="altitude_prov") %>% 
+  dplyr::rename("Pearson correlation with altitude"=altitude_prov) %>% 
   kable(digits=3) %>% 
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F)
