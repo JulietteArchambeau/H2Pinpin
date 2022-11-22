@@ -66,6 +66,7 @@ library(matrixcalc) # CRAN v1.0-3
 library(latex2exp)  # CRAN v0.4.0
 library(psych)      # CRAN v1.8.12 (pairs.panels function)
 library(xtable)
+library(parallel)
 #options(knitr.table.format = "latex")
 ```
 
@@ -1099,6 +1100,9 @@ df[,"meanDist"] <- unlist(lapply(pop.val1, function(x) mean(x$dist,na.rm=T)))
 df[,"Dist1000"] <- unlist(lapply(pop.val1, function(x) length(x$cell[x$dist<1000])))
 ```
 
+## Visualization
+
+### PC1
 
 ```{r VisualizationPC1, echo=F, fig.height=20,fig.width=16}
 layout(matrix(1:10,5,2))
@@ -1285,6 +1289,118 @@ plot(xyprov,add=T)
 text(3500000,2530000, "HOU",cex=1.4)
 ```
 
+### Figures for SI
+
+We generate the figures used in the Supplementary Information to show how PC1 and PC2 scores were attributed to raster cell values within a 20km radius around each population location.
+
+> PC1
+
+We sort `SH.20km.PC1` in ascending order:
+
+```{r SortingBySH1}
+df %>% dplyr::select(prov,SH.20km.PC1) %>% arrange(SH.20km.PC1) %>%  
+  kable() %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+The four populations with the lowest values are OLO, HOU, VER and STJ (we choose these four for visualization because OLO and STJ are located next to each other and so are VER and HOU). The three populations with the highest values are PIA, PIE and ARN (PIE and PIA, the two Corsican populations, are located next to each other).
+
+
+> PC2
+
+We sort `SH.20km.PC2` in ascending order:
+
+```{r SortingBySH2}
+df %>% dplyr::select(prov,SH.20km.PC2) %>% arrange(SH.20km.PC2) %>%  
+  kable() %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+```
+
+The two populations with the lowest values are HOU and CAR. The two populations with the highest values are ARN and COM.
+
+
+```{r FiguresSIVizSH,eval=F}
+xy.selected.prov <- df %>% 
+  dplyr::filter(prov %in% c("OLO","HOU","STJ","VER","PIE","PIA","ARN","COM","CAR","CUE","COC")) %>% 
+  arrange(prov) %>% # ordered by alphabetical order  
+  dplyr::select(longitude,latitude) %>% 
+  SpatialPoints(proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+buff16 <- buffer(xy.selected.prov,width=1600,dissolve=F) # 1km radius around each population location
+buff20 <- buffer(xy.selected.prov,width=20000,dissolve=F) # 20km radius around each population location
+
+# Reprojecting in ETRS89 - LAEA 
+xy.selected.prov <- spTransform(xy.selected.prov,crs(rast.pc1))
+buff20 <- spTransform(buff20,crs(rast.pc1))
+buff16 <- spTransform(buff16,crs(rast.pc1))
+
+
+# Parameters/option for the different populations
+info.pops <- list(ARN=list(code="ARN",
+                           extent=c(3016892,2007109,3056892,2050109),
+                           title="ARN",
+                           legend="FALSE"),
+                  PIAandPIE=list(code="PIAandPIE",
+                               extent=c(4220000,2070000,4300000,2130000),
+                               title="PIA and PIE",
+                               legend="FALSE"),
+                  OLOandSTJ=list(code="OLOandSTJ",
+                           extent=c(3380000,2658000,3437892,2723000),
+                           title="OLO and STJ",
+                           legend="FALSE"),
+                  HOUandVER=list(code="HOUandVER",
+                           extent=c(3439892,2495000,3466892,2580000),
+                           title="HOU and VER",
+                           legend="TRUE"),
+                  CAR=list(code="CARandCUEandCOC",
+                           extent=c(3083392,2095109,3148392,2170109),
+                           title="CAR, CUE and COC",
+                           legend="FALSE"),
+                  COM=list(code="COM",
+                           extent=c(3050392,1617109,3095392,1666109),
+                           title="COM",
+                           legend="FALSE"))
+
+# Generating figures for PC1 and PC2
+list.PCs <- list(PC1=list(code="PC1",
+                          rast=rast.pc1,
+                          pops=info.pops[c("ARN","PIAandPIE","OLOandSTJ","HOUandVER")],
+                          zlim=c(range(tab$PC1)[[1]],range(tab$PC1)[[2]])),
+                 PC2=list(code="PC2",
+                          rast=rast.pc2,
+                          pops=info.pops[c("COM","ARN","HOUandVER","CAR")],
+                          zlim=c(range(tab$PC2)[[1]],range(tab$PC2)[[2]])))
+
+
+mclapply(list.PCs,function(pc){
+
+rastpop <- pc$rast
+
+mclapply(pc$pops,function(x){
+  
+pdf(paste0("figs/CalculatingDrivers/",pc$code,"maps_",x$code,".pdf"),height=6,width=6)
+raster::plot(rastpop,
+     ext=extent(matrix(x$extent, nrow=2)),
+     legend=x$legend,
+     zlim=pc$zlim,
+     legend.width=1, legend.shrink=0.8,
+     axis.args=list(cex.axis=2),
+     legend.args = list(text = code.pc,font = 2, line = 0.2, cex = 2.5),
+     axes=F, box=F,
+     main=x$title,cex.main=2.5,
+     col=colorRampPalette(c("green","blue","yellow","red"))(255),alpha=0.7)
+raster::plot(buff20,add=T,lwd=2)
+plot(xy.selected.prov,add=T,cex=1)#,pch=18,
+plot(buff16,add=T,lwd=2)
+dev.off()
+  
+})
+
+})
+```
+
 ### 1.6-km radius
 
 ```{r}
@@ -1401,9 +1517,9 @@ df %>%
   - <span style="color: red;">`SH.1km.PC2` => **SH2[1.6km]**</span>
 
 
-## Visualization
 
-```{r VisualizeEnvHeteroLeaflet,eval=F, fig.width=8,fig.height=8,echo=F}
+
+```{r VisualizeEnvHeteroLeaflet,eval=F, echo=F,fig.width=8,fig.height=8,echo=F}
 # I don't know why, leaflet doesn't represent well the raster cells within the 20-km and 1.6-km radius,
 # so I stopped using it for visualization
 # probably a problem of projection
