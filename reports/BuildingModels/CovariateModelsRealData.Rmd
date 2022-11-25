@@ -64,6 +64,7 @@ library(parallel)
 library(tidytidbits)  # CRAN v0.2.3
 library(tidybayes)    # CRAN v2.0.1
 library(bayesplot)    # CRAN v1.7.1
+library(forcats)
 library(cowplot)      # CRAN v1.0.0
 library(xtable)
 theme_set(theme_bw(base_size = 20))
@@ -301,11 +302,11 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
 ###################
 
 df.drivers <- readRDS(file=paste0("data/DF_Drivers.rds")) %>% # downloading the dataframe with the drivers
-    dplyr::select(c("prov",contains("bio6"),contains("bio14"))) %>% 
+    dplyr::select(c("prov",contains("MSP"),contains("MCMT"))) %>% 
     dplyr::mutate(across(-prov,scale)) # scaling (mean-centering) the potential drivers
 
 
-  if(trait=="MeanBB"|trait=="MeanDBB"){
+if(trait=="MeanBB"|trait=="MeanDBB"){
     
   df <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
     dplyr::filter(!(prov=="MAD")) %>% 
@@ -333,12 +334,12 @@ df.drivers <- readRDS(file=paste0("data/DF_Drivers.rds")) %>% # downloading the 
   }
   
   # Depending on the site where the traits were measured, we do not use the same CTD
-if(trait=="AST_htnov12") CTD <- c("CTD_bio6_height_asturias","CTD_bio14_height_asturias")
-if(trait %in% c("POR_SLA","d13C","POR_htoct12")) CTD <- c("CTD_bio6_height_SLA_d13C_portugal","CTD_bio14_height_SLA_d13C_portugal")
-if(trait=="BDX_htnov13") CTD <- c("CTD_bio6_height_bordeaux25","CTD_bio14_height_bordeaux25")
-if(trait=="BDX_htnov18") CTD <- c("CTD_bio6_height_bordeaux85","CTD_bio14_height_bordeaux85")
-if(trait=="meanBB") CTD <- c("CTD_bio6_meanBB_bordeaux","CTD_bio14_meanBB_bordeaux")
-if(trait=="meanDBB") CTD <- c("CTD_bio6_meanDBB_bordeaux","CTD_bio14_meanDBB_bordeaux")
+if(trait=="AST_htnov12") CTD <- c("CTD_MCMT_height_asturias","CTD_MSP_height_asturias")
+if(trait %in% c("POR_SLA","d13C","POR_htoct12")) CTD <- c("CTD_MCMT_height_SLA_d13C_portugal","CTD_MSP_height_SLA_d13C_portugal")
+if(trait=="BDX_htnov13") CTD <- c("CTD_MCMT_height_bordeaux25","CTD_MSP_height_bordeaux25")
+if(trait=="BDX_htnov18") CTD <- c("CTD_MCMT_height_bordeaux85","CTD_MSP_height_bordeaux85")
+if(trait=="meanBB") CTD <- c("CTD_MCMT_meanBB_bordeaux","CTD_MSP_meanBB_bordeaux")
+if(trait=="meanDBB") CTD <- c("CTD_MCMT_meanDBB_bordeaux","CTD_MSP_meanDBB_bordeaux")
 
   list.stan <- lapply(CTD, function(x)    {
     list(N=length(df$tree),
@@ -404,20 +405,17 @@ PlotParam <- function(x){
   p <- x %>% 
   ggplot(aes(x = Drivers, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,show.legend = c(size = TRUE)) +
-  facet_grid(.~Hyp,scales="free", space = "free") + 
+  facet_grid(.~fct_relevel(Hyp,"Admixture","Climate harshness","Temporal heterogeneity","Spatial heterogeneity"),
+             scales="free", space = "free") + 
   ylab(TeX(yaxis.label)) + xlab("") +
-  scale_colour_manual(labels = trait.labels, # 
-                     values = trait.colors) +
-  scale_shape_manual(labels = trait.labels,
-                     values = trait.shapes) +
+  scale_colour_manual(values = trait.colors) +
+  scale_shape_manual(values = trait.shapes) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
         axis.text.y = element_text(size=16),
         axis.title = element_text(size=16),
       legend.title=element_text(size=13), 
       legend.text=element_text(size=10),
-      #legend.position = c(.3, .08),
-      #legend.background = element_rect(colour = "grey"),
       strip.text.x = element_text(size = 14),
       panel.grid.minor.x=element_blank(),
       panel.grid.major.x=element_blank()) +
@@ -457,19 +455,19 @@ set.seed(444)
 
 ########################################
 # Running the models on a filtered dataset or not? (modification after the first round of review in Heredity)
-sub = "alldata" # if the dataset is not filtered.
+ sub = "alldata" # if the dataset is not filtered.
 
 ### Two filtered datasets:
 
 # Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-#sub = "sub1"
-#sub.clones = 3
-#sub.ind = 3
+# sub = "sub1"
+# sub.clones = 3
+# sub.ind = 3
 
 # Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-#sub = "sub2"
-#sub.clones = 10
-#sub.ind = 6
+sub = "sub2"
+sub.clones = 10
+sub.ind = 6
 ########################################
 
 # Dataset in which the potential drivers are
@@ -482,14 +480,13 @@ drivers = c("A","D", # population admixture indexes
             "var_bio6","var_MCMT","var_EMT","var_bio14","var_SHM","var_MSP") # temporal heterogeneity indexes
 
 selected.drivers <- c("A","D",
-                      "mean_bio6","mean_bio14",
-                      "SH.20km.PC1","SH.20km.PC2","SH.1km.PC1","SH.1km.PC2",
-                      "var_bio6","var_bio14")
+                      "mean_MCMT","mean_MSP","var_MCMT","var_MSP",
+                      "SH.20km.PC1","SH.20km.PC2","SH.1km.PC1","SH.1km.PC2")
 
 selected.drivers.labels <- c("A","D",
-                             "mean(bio6)","mean(bio14)",
-                             "SH1[20km]","SH2[20km]","SH1[1.6km]","SH2[1.6km]", 
-                             "variance(bio6)","variance(bio14)")
+                             "mean(MCMT)","mean(MSP)",
+                             "var(MCMT)","var(MSP)",
+                             "SH1[20km]","SH2[20km]","SH1[1.6km]","SH2[1.6km]")
 
 # Downloading and scaling (mean-centering) the potential drivers
 df.drivers <- readRDS(file=paste0("data/DF_Drivers.rds")) %>% # downloading the dataframe with the drivers
@@ -510,7 +507,7 @@ if(sub=="sub2"){
                     "Height (Bordeaux, 85 months)",
                     "Mean bud burst date (Bordeaux)",
                     "Mean duration of bud burst (Bordeaux)")
-  trait.colors <- c("#B2182B","#D73027", "#FDAE61","#5AAE61","#A6DBA0")
+  trait.colors <- c("#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0")
   trait.shapes <- c(16,16,16,17, 17)} else {
     
   traits <- c("POR_htoct12","AST_htnov12","BDX_htnov13","BDX_htnov18","MeanBB","MeanDBB","POR_SLA","d13C")
@@ -542,8 +539,8 @@ provs <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds"
 ######################
 
 selected.drivers.colors <- c("#4D9221" ,"#7FBC41", "#C51B7D" ,"#DE77AE",
-                              "#2D004B","#542788" ,"#8073AC" ,"#B2ABD2",
-                              "#E08214" ,"#FDB863")
+                              "#E08214" ,"#FDB863",
+                              "#2D004B","#542788" ,"#8073AC" ,"#B2ABD2")
 ```
 
 # Running and saving the models
@@ -552,8 +549,12 @@ For each of the eight trait, we ran eight models, one for each potential driver:
 
 ```{r RunModel,eval=F}
 for(trait in traits){
-  
+
+if(sub=="sub2"|sub=="sub1"){
+stanlist.drivers <- DownloadData(trait,sub,drivers=selected.drivers)
+} else if(sub=="alldata"){
 stanlist.drivers <- DownloadData(trait,sub,drivers)
+}
 
 list.models <- list()
 
@@ -609,12 +610,12 @@ df.betaX <- mclapply(traits,ExtractParam) %>%
                       Drivers=="mean_bio14"~"mean(bio14)",
                       Drivers=="mean_MSP"~"mean(MSP)",
                       Drivers=="mean_SHM"~"mean(SHM)",
-                      Drivers=="var_bio6"~"variance(bio6)",
-                      Drivers=="var_MCMT"~"variance(MCMT)",
-                      Drivers=="var_EMT"~"variance(EMT)",
-                      Drivers=="var_bio14"~"variance(bio14)",
-                      Drivers=="var_MSP"~"variance(MSP)",
-                      Drivers=="var_SHM"~"variance(SHM)",
+                      Drivers=="var_bio6"~"var(bio6)",
+                      Drivers=="var_MCMT"~"var(MCMT)",
+                      Drivers=="var_EMT"~"var(EMT)",
+                      Drivers=="var_bio14"~"var(bio14)",
+                      Drivers=="var_MSP"~"var(MSP)",
+                      Drivers=="var_SHM"~"var(SHM)",
                       TRUE ~ as.character(Drivers)),
          Hyp=case_when(Drivers=="A"~"Admixture",
                        Drivers=="D"~"Admixture",
@@ -628,12 +629,12 @@ df.betaX <- mclapply(traits,ExtractParam) %>%
                        Drivers=="mean(bio14)"~"Climate harshness",
                        Drivers=="mean(SHM)"~"Climate harshness",
                        Drivers=="mean(MSP)"~"Climate harshness",
-                       Drivers=="variance(bio6)"~"Temporal heterogeneity",
-                       Drivers=="variance(MCMT)"~"Temporal heterogeneity",
-                       Drivers=="variance(EMT)"~"Temporal heterogeneity",
-                       Drivers=="variance(bio14)"~"Temporal heterogeneity",
-                       Drivers=="variance(SHM)"~"Temporal heterogeneity",
-                       Drivers=="variance(MSP)"~"Temporal heterogeneity"),
+                       Drivers=="var(bio6)"~"Temporal heterogeneity",
+                       Drivers=="var(MCMT)"~"Temporal heterogeneity",
+                       Drivers=="var(EMT)"~"Temporal heterogeneity",
+                       Drivers=="var(bio14)"~"Temporal heterogeneity",
+                       Drivers=="var(SHM)"~"Temporal heterogeneity",
+                       Drivers=="var(MSP)"~"Temporal heterogeneity"),
          TraitType=case_when(Traits=="POR_htoct12"~"Morphological",
                              Traits=="BDX_htnov13"~"Morphological",
                              Traits=="AST_htnov12"~"Morphological",
@@ -645,7 +646,7 @@ df.betaX <- mclapply(traits,ExtractParam) %>%
          Traits=factor(Traits,levels=c(traits)))
 
 
-if(sub=="sub2"){width.png.selected.drivers=10} else {
+if(sub=="sub2"){width.png.selected.drivers=15} else {
   width.png.selected.drivers=18}
 
 
@@ -682,44 +683,6 @@ p <- ExtractPopSpecificParam(trait) %>%
     guides(color=guide_legend(ncol=5))
   
     ggsave(p,file=paste0("figs/PosteriorDistributions/",trait,"_SigmaClon_",sub,".png"),height=6,width=22) })
-
-
-
-
-# mclapply(traits,function(x){
-# 
-# p <- readRDS(file=paste0("outputs/models/",x,"_",sub,".rds")) %>% 
-#   mclapply(function(x) {
-#     broom::tidyMCMC(x,pars=(param),
-#                 droppars = NULL, 
-#                 estimate.method = point.est, 
-#                 ess = F, 
-#                 rhat = F, 
-#                 conf.int = T,
-#                 conf.level = conf.level)}) %>%  
-#   bind_rows(.id="Drivers") %>% 
-#   mutate(Traits=x,
-#          prov=rep(provs,length(drivers))) %>% 
-#   dplyr::filter(Drivers %in% selected.drivers) %>% 
-#   mutate(Drivers=factor(Drivers,levels=selected.drivers)) %>% 
-#   ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
-#   geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
-#   scale_color_manual(values=c( "#4D9221" ,"#7FBC41", "#C51B7D" ,"#DE77AE",
-#                               
-#                               "#2D004B","#542788" ,"#8073AC" ,"#B2ABD2",
-#                               "#E08214" ,"#FDB863" ),
-#                      labels=selected.drivers.labels) +
-#   xlab("Populations") +
-#   ylab(TeX("$\\sigma^{2}_{C_{p}}$ estimates")) +
-#   labs(color = "Potential drivers") +
-#   theme(legend.position = "bottom",
-#         panel.grid.minor.x=element_blank(),
-#         panel.grid.major.x=element_blank())  +
-#     guides(color=guide_legend(ncol=5))
-#     
-#   ggsave(p,file=paste0("figs/PosteriorDistributions/",x,"_SigmaClon_",sub,".png"),height=6,width=22)
-#   
-# })
 ```
 
 
@@ -740,10 +703,10 @@ p <- ExtractPopSpecificParam(trait) %>%
     Drivers=="SH.20km.PC2" ~ SH.20km.PC2,
     Drivers=="SH.1km.PC1" ~ SH.1km.PC1,
     Drivers=="SH.1km.PC2" ~ SH.1km.PC2,
-    Drivers=="mean_bio6" ~ mean_bio6,
-    Drivers=="mean_bio14" ~ mean_bio14,
-    Drivers=="var_bio6" ~ var_bio6,
-    Drivers=="var_bio14" ~ var_bio14
+    Drivers=="mean_MCMT" ~ mean_MCMT,
+    Drivers=="mean_MSP" ~ mean_MSP,
+    Drivers=="var_MCMT" ~ var_MCMT,
+    Drivers=="var_MSP" ~ var_MSP,
   )) %>% 
   dplyr::select(-A,-D, -contains("km.PC"),-contains("_bio")) %>% 
   mutate(Drivers= case_when(
@@ -751,10 +714,10 @@ p <- ExtractPopSpecificParam(trait) %>%
     Drivers=="SH.20km.PC2" ~ "SH2[20km]",
     Drivers=="SH.1km.PC1" ~ "SH1[1.6km]",
     Drivers=="SH.1km.PC2" ~ "SH2[1.6km]",
-    Drivers=="mean_bio6" ~ "mean(bio6)",
-    Drivers=="mean_bio14" ~ "mean(bio14)",
-    Drivers=="var_bio6" ~ "variance(bio6)",
-    Drivers=="var_bio14" ~ "variance(bio14)",
+    Drivers=="mean_MCMT" ~ "mean(MCMT)",
+    Drivers=="mean_MSP" ~ "mean(MSP)",
+    Drivers=="var_MCMT" ~ "var(MCMT)",
+    Drivers=="var_MSP" ~ "var(MSP)",
     Drivers=="A" ~ "A",
     Drivers=="D" ~ "D"))
 
@@ -784,10 +747,10 @@ readRDS(file=paste0("outputs/models/",x,"_",sub,".rds")) %>%
     Drivers=="SH.20km.PC2" ~ "SH2[20km]",
     Drivers=="SH.1km.PC1" ~ "SH1[1.6km]",
     Drivers=="SH.1km.PC2" ~ "SH2[1.6km]",
-    Drivers=="mean_bio6" ~ "mean(bio6)",
-    Drivers=="mean_bio14" ~ "mean(bio14)",
-    Drivers=="var_bio6" ~ "variance(bio6)",
-    Drivers=="var_bio14" ~ "variance(bio14)",
+    Drivers=="mean_MCMT" ~ "mean(MCMT)",
+    Drivers=="mean_MSP" ~ "mean(MSP)",
+    Drivers=="var_MCMT" ~ "var(MCMT)",
+    Drivers=="var_MSP" ~ "var(MSP)",
     Drivers=="A" ~ "A",
     Drivers=="D" ~ "D")) %>% 
   pivot_wider(names_from = term,values_from=c(estimate,conf.low,conf.high))})
@@ -921,18 +884,18 @@ p <- ExtractParam(trait) %>%
                       Drivers=="SH.20km.PC2"~"SH2[20km]",
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
                       Drivers=="SH.1km.PC2"~"SH2[1.6km]",
-                      Drivers=="mean_bio6"~"mean(bio6)",
-                      Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="var_bio6"~"variance(bio6)",
-                      Drivers=="var_bio14"~"variance(bio14)",
+                      Drivers=="mean_MCMT" ~ "mean(MCMT)",
+                      Drivers=="mean_MSP" ~ "mean(MSP)",
+                      Drivers=="var_MCMT" ~ "var(MCMT)",
+                      Drivers=="var_MSP" ~ "var(MSP)",
                       TRUE ~ as.character(Drivers)),
          prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),length(selected.drivers))) %>% 
-  mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r"))) %>% 
+  mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r")),
+         Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
   
   ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
   geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
-  scale_color_manual(values=selected.drivers.colors,
-                     labels=selected.drivers.labels) +
+  scale_color_manual(values=selected.drivers.colors) +
   xlab("") +
   ylab("Proportion of variance explained") +
   labs(color = "Potential drivers") +
@@ -964,18 +927,18 @@ plots <- mclapply(heights, function(trait){
                       Drivers=="SH.20km.PC2"~"SH2[20km]",
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
                       Drivers=="SH.1km.PC2"~"SH2[1.6km]",
-                      Drivers=="mean_bio6"~"mean(bio6)",
-                      Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="var_bio6"~"variance(bio6)",
-                      Drivers=="var_bio14"~"variance(bio14)",
+                      Drivers=="mean_MCMT" ~ "mean(MCMT)",
+                      Drivers=="mean_MSP" ~ "mean(MSP)",
+                      Drivers=="var_MCMT" ~ "var(MCMT)",
+                      Drivers=="var_MSP" ~ "var(MSP)",
                       TRUE ~ as.character(Drivers)),
          prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),length(selected.drivers))) %>% 
-  mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r"))) %>% 
+  mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r")),
+         Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
   
   ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
   geom_pointinterval(position = position_dodge(width = .8),point_size=4,alpha=0.6,size=8) +
-  scale_color_manual(values=selected.drivers.colors,
-                     labels=selected.drivers.labels) +
+  scale_color_manual(values=selected.drivers.colors) +
   xlab("") +
   ylim(0,0.9) +
   ylab("Proportion of variance explained") +
@@ -1040,13 +1003,16 @@ p <- traits %>%
                       Drivers=="SH.20km.PC2"~"SH2[20km]",
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
                       Drivers=="SH.1km.PC2"~"SH2[1.6km]",
-                      Drivers=="mean_bio6"~"mean(bio6)",
-                      Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="var_bio6"~"variance(bio6)",
-                      Drivers=="var_bio14"~"variance(bio14)",
+                      Drivers=="mean_MCMT" ~ "mean(MCMT)",
+                      Drivers=="mean_MSP" ~ "mean(MSP)",
+                      Drivers=="var_MCMT" ~ "var(MCMT)",
+                      Drivers=="var_MSP" ~ "var(MSP)",
                       TRUE ~ as.character(Drivers)),
          Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
-  ggplot(aes(x = trait.names, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
+  ggplot(aes(x = trait.names, y = estimate,
+                   ymin = conf.low, 
+                   ymax = conf.high,
+                   color=fct_relevel(Drivers,levels=selected.drivers.labels))) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,alpha=0.6) +
   facet_grid(.~trait.class,scales="free", space = "free") + 
   ylab(TeX("$R^{2}$")) + 
@@ -1170,8 +1136,8 @@ saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 ```{r FigureCTD, eval=T, fig.height=6,fig.width=9}
 CTDbetaX <- readRDS(file=paste0("outputs/models/CTDbetaX.rds")) %>% 
   bind_rows(.id="Traits") %>%
-  mutate(Drivers=case_when(str_detect(driver,"bio6")==TRUE ~ paste0("CTD(",str_sub(driver,5,8),")"),
-                           str_detect(driver,"bio14")==TRUE ~ paste0("CTD(",str_sub(driver,5,9),")")),
+  mutate(Drivers=case_when(str_detect(driver,"MCMT")==TRUE ~ paste0("CTD(",str_sub(driver,5,8),")"),
+                           str_detect(driver,"MSP")==TRUE ~ paste0("CTD(",str_sub(driver,5,7),")")),
          Traits=factor(Traits,levels=traits))
 
 
@@ -1771,8 +1737,8 @@ d <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>%
               conf.int = T,
               conf.level = conf.level)) %>% 
   bind_rows() %>% 
-  mutate(Drivers=selected.drivers,
-         Drivers=factor(Drivers,levels=selected.drivers))
+  mutate(Drivers=selected.drivers) %>% 
+  mutate(Drivers=factor(Drivers,levels=selected.drivers))
 
 
 p <- ggplot(d,aes(x = Drivers, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
@@ -1804,6 +1770,7 @@ p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>%
                 conf.level = conf.level)}) %>%  
   bind_rows(.id="Drivers") %>% 
   mutate(prov=rep(provs,length(selected.drivers))) %>% 
+  mutate(Drivers=factor(Drivers,levels=selected.drivers)) %>% 
   ggplot(aes(x = prov, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
   geom_pointinterval(position = position_dodge(width = .8),point_size=2,alpha=0.6,size=4) +
   scale_color_manual(values=selected.drivers.colors,
@@ -1829,8 +1796,9 @@ p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>%
     broom::tidyMCMC(x,pars=("pi"),
                 droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
   bind_rows(.id="Drivers") %>% 
-  mutate(prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon","sigma_site","sigma_GE"),length(selected.drivers)),
-         prop.var=factor(prop.var, levels=c("sigma_site","sigma_block","sigma_GE","sigma_prov","mean_sigma_clon","sigma_r"))) %>%
+  mutate(prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon","sigma_site","sigma_GE"),length(selected.drivers))) %>% 
+  mutate(prop.var=factor(prop.var, levels=c("sigma_site","sigma_block","sigma_GE","sigma_prov","mean_sigma_clon","sigma_r"))) %>%
+  mutate(Drivers=factor(Drivers,levels=selected.drivers)) %>% 
   ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
   geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
   scale_color_manual(values=selected.drivers.colors,
