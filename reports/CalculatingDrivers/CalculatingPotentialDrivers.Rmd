@@ -67,7 +67,6 @@ library(latex2exp)  # CRAN v0.4.0
 library(psych)      # CRAN v1.8.12 (pairs.panels function)
 library(xtable)
 library(parallel)
-#options(knitr.table.format = "latex")
 ```
 
 
@@ -463,6 +462,16 @@ df %>%
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
+
+df %>% 
+  arrange(prov) %>% 
+  dplyr::select(-longitude,-latitude) %>% 
+  xtable(type = "latex",digits=2) %>% 
+  print(file = "tables/Drivers/PopulationAdmixtureIndexesValues.tex",
+      include.rownames=FALSE)
+# print(xtable(df, type = "latex",digits=2),
+#       file = "tables/Drivers/ClimaticDriversValues.tex",
+#       include.rownames=FALSE)
 ```
 
 <span style="color: red;">$A$ and $D_{fst}$ are correlated at `r round(CorADfst,2)` and $D$ and $D_{fst}$ at `r round(CorDDfst,2)`.</span>
@@ -931,6 +940,9 @@ We **perform a PCA** on the selected cell values = cell in forested areas and in
 
 ```{r RunPCA, fig.height=10,fig.width=10}
 tab <- readRDS(file="data/DF_EnvHetero.rds")
+
+# We rename PRCsum to MSP (to have the same variable names in the paper)
+tab <- tab %>% dplyr::rename(MSP=PRCsum)
 
 pca <- prcomp(tab[,-1], center = TRUE, scale. = TRUE) # centered and scaled PCA
 
@@ -1646,8 +1658,20 @@ corSHWVNumerator <- cor(df[,"SHW"],df[,"NumeratorSHW"])
 
 <span style="color: red;">In the following analyses, we are going to use $SH$ at 20-km radius for both PC1 and PC2 scores (**SH1[20km]** and **SH2[20km]**) and $SH$ at 1.6-km radius for both PC1 and PC2 too (**SH1[1.6km]** and **SH2[1.6km]**).</span>
 
+## SI Table
 
-# Climate harshness
+```{r TableSuppInfoSHDriverValues}
+df %>% 
+  arrange(prov) %>% 
+  dplyr::select(prov,
+                SH.20km.PC1,SH.20km.PC2, SH.1km.PC1,SH.1km.PC2,
+                Nb.val.20km,Nb.val.1km) %>% 
+  xtable(type = "latex",digits=2) %>% 
+  print(file = "tables/Drivers/SHDriversValues.tex",
+      include.rownames=FALSE)
+```
+
+# Climate harshness and temporal heterogeneity
 
 We initially extracted $SHM$ and $EMT$ values from the same raster files used to calculate the spatial environmnental heterogeneity. As the raster files have a 1kmx1km spatial resolution, the extraction from the raster files is less accurate than extracting point-estimate climatic data with ClimateDT (bilinear interpolation). 
 
@@ -1681,7 +1705,7 @@ df %>%
 ```
 
 
-```{r ClimateHarshnessIndexes}
+```{r ClimateHarshnessIndexes, fig.height=12,fig.width=12}
 climDT <- read.csv("data/Climate/Raw/ClimateDTdownloads/ClimateDT_outputs.csv") %>% 
   group_by(ID) %>% 
   dplyr::summarise(mean_bio6=mean(bio6),   # minimum temperature of the coldest month
@@ -1707,6 +1731,18 @@ df <- df %>%  merge(climDT,by="prov")
 ```
 
 
+## SI Table
+
+```{r TableSuppInfoClimateHarshnessTempHeteroDriverValues}
+df %>% 
+  arrange(prov) %>% 
+  dplyr::select(prov, 
+                mean_MCMT,mean_MSP,
+                var_MCMT,var_MSP) %>% 
+  xtable(type = "latex",digits=2) %>% 
+  print(file = "tables/Drivers/ClimateHarshnessTempHeteroDriversValues.tex",
+      include.rownames=FALSE)
+```
 
 # Climatic transfer distances
 
@@ -1768,7 +1804,7 @@ We do not know when the **functional traits** were measured in Portugal  (the mo
 
 We now add in `df` some columns for the climatic transfer distances.
 
-```{r CreateColumnsCTD}
+```{r CreateColumnsCTDbio6bio14}
 df.site <- read.csv("data/Climate/Raw/ClimateDTdownloads/ClimateDT_outputs_sites.csv")
 
 # Height (Asturias, 21 months)
@@ -1826,60 +1862,108 @@ df %>%
   column_spec(1, bold = T)
 ```
 
-# Export drivers and save table for Supp Info
 
-```{r SaveDF}
-saveRDS(df,file="data/DF_Drivers.rds")
-```
+```{r CreateColumnsCTDofMSPandMCMT}
+df.site <- read.csv("data/Climate/Raw/ClimateDTdownloads/ClimateDT_outputs_sites.csv")
 
-```{r TableSuppInfoDriverValues}
-df.suppinfo <- df %>% 
-  dplyr::select(prov, SH.20km.PC1,SH.20km.PC2, SH.1km.PC1,SH.1km.PC2,Nb.val.20km,Nb.val.1km) # Add temporal heterogeneity indexes + climate harshness indexes here ! 
-  
+# Height (Asturias, 21 months)
+MCMT_height_asturias <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="asturias","MCMT"]) # mean across 2011 and 2012 
+MSP_height_asturias <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="asturias","MSP"]) # mean across 2011 and 2012 
 
-print(xtable(df.suppinfo, type = "latex",digits=2),
-      file = "tables/Drivers/ClimaticDriversValues.tex",
-      include.rownames=FALSE)
-```
+# Height (Fundão, 20 months) + SLA + d13C
+MCMT_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","MCMT"]) # mean across 2011 and 2012 
+MSP_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","MSP"]) # mean across 2011 and 2012                         
 
-# Correlations 
+# Height (Bordeaux, 25 months)
+MCMT_height_bordeaux25 <- mean(df.site[df.site$Year %in% 2011:2013 & df.site$ID=="bordeaux","MCMT"]) # mean across 2011, 2012 and 2013
+MSP_height_bordeaux25 <- mean(df.site[df.site$Year %in% 2012:2013 & df.site$ID=="bordeaux","MSP"]) # mean across 2012 and 2013 (were not planted during the 2011 summer)                       
+# Height (Bordeaux, 85 months)
+MCMT_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2011:2018 & df.site$ID=="bordeaux","MCMT"]) # mean from 2011 to 2018
+MSP_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2012:2018 & df.site$ID=="bordeaux","MSP"]) # mean from 2011 to 2018
 
-Correlations among the potential drivers:
+# Mean bud burst date (Bordeaux)
+MCMT_meanBB_bordeaux <- mean(df.site[df.site$Year %in% c(2013:2015,2017) & df.site$ID=="bordeaux","MCMT"]) # mean across years 2013, 2014, 2015 and 2017
+MSP_meanBB_bordeaux <- mean(df.site[df.site$Year %in% c(2013:2015,2017) & df.site$ID=="bordeaux","MSP"]) # same
 
-```{r CorrelationsAllDrivers}
-df %>% dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
-                     SH.1km.PC1,SH.1km.PC2,mean_bio6,mean_bio14,var_bio6,var_bio14) %>% 
+# Mean duration of bud burst (Bordeaux)
+MCMT_meanDBB_bordeaux <- mean(df.site[df.site$Year %in% c(2014:2015,2017) & df.site$ID=="bordeaux","MCMT"]) #  mean across years 2014, 2015 and 2017
+MSP_meanDBB_bordeaux <- mean(df.site[df.site$Year %in% c(2014:2015,2017) & df.site$ID=="bordeaux","MSP"]) # same
+
+
+df <- df %>% 
+  dplyr::mutate(CTD_MCMT_height_asturias=(mean_MCMT-MCMT_height_asturias) %>% abs(),
+                CTD_MSP_height_asturias=(mean_MSP-MSP_height_asturias) %>% abs(),
+                CTD_MCMT_height_SLA_d13C_portugal=(mean_MCMT-MCMT_height_SLA_d13C_portugal) %>% abs(),
+                CTD_MSP_height_SLA_d13C_portugal=(mean_MSP-MSP_height_SLA_d13C_portugal) %>% abs(),
+                CTD_MCMT_height_bordeaux25=(mean_MCMT-MCMT_height_bordeaux25) %>% abs(),
+                CTD_MSP_height_bordeaux25=(mean_MSP-MSP_height_bordeaux25) %>% abs(),
+                CTD_MCMT_height_bordeaux85=(mean_MCMT-MCMT_height_bordeaux85) %>% abs(),
+                CTD_MSP_height_bordeaux85=(mean_MSP-MSP_height_bordeaux85) %>% abs(),
+                CTD_MCMT_meanBB_bordeaux=(mean_MCMT-MCMT_meanBB_bordeaux) %>% abs(),
+                CTD_MSP_meanBB_bordeaux=(mean_MSP-MSP_meanBB_bordeaux) %>% abs(),
+                CTD_MCMT_meanDBB_bordeaux=(mean_MCMT-MCMT_meanDBB_bordeaux) %>% abs(),
+                CTD_MSP_meanDBB_bordeaux=(mean_MSP-MSP_meanDBB_bordeaux) %>% abs())
+                
+
+df %>% 
+  dplyr::select(prov,contains("CTD")) %>% 
+  kable(digits=2) %>%
+  kable_styling(font_size=11,bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+
+df %>% 
+  dplyr::select(contains("MCMT"),contains("MSP")) %>% 
   cor() %>% 
-  lower.triangle() %>% 
+  lower.triangle() %>%
   kable(digits=3) %>%
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 ```
 
+# Export drivers
 
-```{r CorrelationsAllDriversTableLatex, echo=F,eval=F}
-# Here the code to get the latex code of the table
-options(knitr.table.format = "latex")
-df %>% 
-  dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
-                     SH.1km.PC1,SH.1km.PC2,mean_bio6,mean_bio14,var_bio6,var_bio14) %>% 
-  cor() %>% 
-  lower.triangle() %>% 
-  kable(digits=3,"latex") %>% 
-  kable_styling(latex_options =c("striped", "hold_position"))
+```{r SaveDF}
+saveRDS(df,file="data/DF_Drivers.rds")
 ```
+
+
+
+# Correlations 
+
+Correlations among the potential drivers:
+
+```{r CorrelationsAllDrivers}
+dfcor <- df %>% 
+  dplyr::select(A,D,
+                mean_MCMT,mean_MSP,var_MCMT,var_MSP,
+                SH.20km.PC1,SH.20km.PC2,
+                SH.1km.PC1,SH.1km.PC2) %>% 
+  cor() %>% 
+  lower.triangle()
+
+dfcor %>% 
+  kable(digits=3) %>%
+  kable_styling(font_size=11,
+                bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
+  column_spec(1, bold = T)
+
+print(xtable(dfcor, type = "latex",digits=3),
+      file = "tables/Drivers/ClimaticDriversCorrelations.tex",
+      include.rownames=FALSE)
+```
+
 
 Correlations between the potential drivers and the altitude of the populations:
 
 ```{r CorrelationDriversAltitude}
-readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
+dfcoralt <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>% 
   dplyr::filter(!(prov=="MAD")) %>% 
   dplyr::select(prov,altitude_prov) %>% 
   distinct() %>% 
   inner_join(df,by="prov") %>% 
   dplyr::select(A,D,SH.20km.PC1,SH.20km.PC2,
-                SH.1km.PC1,SH.1km.PC2,contains("bio6"),(contains("bio14")),altitude_prov) %>% 
+                SH.1km.PC1,SH.1km.PC2,contains("MSP"),(contains("MCMT")),altitude_prov) %>% 
   cor() %>% 
   upper.triangle() %>% 
   as.data.frame() %>% 
@@ -1887,10 +1971,17 @@ readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds") %>%
   dplyr::select(Variable,altitude_prov) %>% 
   arrange(desc(abs(altitude_prov))) %>% 
   dplyr::filter(!Variable=="altitude_prov") %>% 
-  dplyr::rename("Pearson correlation with altitude"=altitude_prov) %>% 
+  dplyr::rename("Pearson correlation with altitude"=altitude_prov) 
+
+
+dfcoralt %>% 
   kable(digits=3) %>% 
   kable_styling(font_size=11,
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F)
+
+print(xtable(dfcoralt, type = "latex",digits=3),
+      file = "tables/Drivers/ClimaticDriversCorrelationAltitude.tex",
+      include.rownames=FALSE)
 ```
 
 
