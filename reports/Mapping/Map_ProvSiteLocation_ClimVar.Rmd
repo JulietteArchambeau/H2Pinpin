@@ -67,7 +67,7 @@ library(rnaturalearth)
 
 # Provenance and site coordinates
 
-```{r ProvSiteCoordinates}
+```{r ProvSiteCoordinates,warning=F,message=F}
 # Load CLONAPIN phenotypic data
 data <- readRDS(file="data/ClonapinData/PhenoDataNovember2019_AnnualTraits.rds")
 
@@ -152,12 +152,12 @@ xysite <- SpatialPoints(df[,c("longitude","latitude")],
 xysite <- spTransform(xysite,crs(raster(paste0("data/Climate/Raw/FromMaurizio/Annualndices/EMT.tif"))))
 
 # for mapping
-xysitedf <- xysite@coords %>% as_tibble() %>% mutate(Site=c("Asturias","Bordeaux","Portugal"))
+xysitedf <- xysite@coords %>% as_tibble() %>% mutate(Site=c("Asturias","Bordeaux","Fundão"))
 ```
 
 
 
-```{r MaritimePineDistri}
+```{r MaritimePineDistri,warning=F,message=F}
 # Create a buffer of 10 km around the population and site location
 buffer.prov <- buffer(xyprov,width=10000)
 buffer.site <- buffer(xysite,width=10000)
@@ -173,16 +173,16 @@ PinpinDistri <- rgeos::gUnion(PinpinDistri,buffer.site)
 
 # PCA of the 2 climatic variables
 
-$EMT$: Extreme minimum temperature over the period considered (1901-1950) (°C)
+$PRCsum$: Mean summer precipitation (mm) ($MSP$ in the manuscript and in ClimateDT)
 
-$SHM$: Summer heat moisture index (°C/mm)
+$MCMT$: Mean Coldest Month Temperature (°C)
 
 The CRS of the climatic rasters is **EPSG:3035 (ETRS89, LAEA)** (+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs).
 
-```{r PCA,fig.height=5,fig.width=5}
+```{r PCA,fig.height=5,fig.width=5,warning=F,message=F}
 ext <- extent(matrix(c(2500000,1200000,4500000,3000000), nrow=2)) # extent for the map visualization
 
-var.clim <- c("EMT","SHM")
+var.clim <- c("PRCsum","MCMT")
 
 clim.val <- var.clim %>% mclapply(function(x){
 
@@ -227,7 +227,7 @@ plotRGB(outRast, r = 1, g = 2, b = 3, bgalpha=0)
 
 # Mapping for Figure 1
 
-```{r MapPCA,fig.height=10,fig.width=10}
+```{r MapPCA,fig.height=10,fig.width=10,warning=F,message=F}
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
 p <- ggRGB(outRast, r=1,g=2, b=3) + 
@@ -254,11 +254,11 @@ p <- ggRGB(outRast, r=1,g=2, b=3) +
   theme_map()
 p
 
-#ggsave(p,file="maps/maprgb_progtest.svg") # then I used Inkscape to do the final map
+ggsave(p,file="maps/maprgb_progtest.svg") # then I used Inkscape to do the final map
 ```
 
 
-```{r PlottingPCA,eval=T,fig.height=5,fig.width=5}
+```{r PlottingPCA,eval=T,fig.height=10,fig.width=10}
 nvs <- dim(pca$rotation)[1]
 vec <-  row.names(pca$rotation)
 lv <- length(vec)
@@ -278,7 +278,7 @@ cell.num.site <- raster::extract(rast1,xysite,cellnumbers=T)[,"cells"]
 
 
 # Option with all provenances represented in the same way
-#png("maps/pca.png", width = 1000, height = 1000)
+png("maps/pca.png", width = 1000, height = 1000)
 plot((pca$x[, 1:2]), xlim = xrng, ylim = yrng, pch = ".", cex = 4, col = rgb(rast1[clim.val$cell.num] , 
                                                                              rast2[clim.val$cell.num], 
                                                                              rast3[clim.val$cell.num], max = 255), asp = 1)
@@ -292,7 +292,7 @@ points(clim.val$PCA1[clim.val$cell.num %in% cell.num.prov],
 
 points(clim.val$PCA1[clim.val$cell.num %in% cell.num.site],
        clim.val$PCA2[clim.val$cell.num %in% cell.num.site], pch = 17,cex=1.5,col="red")
-#dev.off() 
+dev.off() 
 
 
 # Option that differentiate provenance in common or not with the progeny test data
