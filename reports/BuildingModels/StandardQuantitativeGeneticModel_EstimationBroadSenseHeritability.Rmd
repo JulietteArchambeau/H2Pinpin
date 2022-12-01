@@ -70,21 +70,6 @@ options(mc.cores = parallel::detectCores())
 ```
 
 
-```{r OptionDocs}
-# Options for sampling
-n_chains <- 4
-n_iter <- 2500
-n_warm <- 1250
-n_thin <- 1
-save_warmup = FALSE 
-
-theme_set(theme_bw(base_size = 20))
-
-# option for the MCMC intervals
-point.est="median"
-
-conf.level <- 0.95
-```
 
 # Model equation and code
 
@@ -136,13 +121,45 @@ model = stan_model("scripts/StanModels/HierarchicalModel_StandardQuantitativeGen
 model
 ```
 
+# Options and parameters
+
+```{r OptionDocs}
+# Options for sampling
+n_chains <- 4
+n_iter <- 2500
+n_warm <- 1250
+n_thin <- 1
+save_warmup = FALSE 
+
+theme_set(theme_bw(base_size = 20))
+
+# option for the MCMC intervals
+point.est="median"
+
+conf.level <- 0.95
+```
+
+```{r Parameters}
+traits <- c("POR_htoct12","AST_htnov12","BDX_htnov13","BDX_htnov18","MeanBB","MeanDBB","POR_SLA","d13C")
+d13c <- parse(text = TeX("$\\delta^{13}C$ (Fundão)"))
+trait.labels <- c("Height (Fundão, 20 months)",
+                    "Height (Asturias, 21 months)",
+                    "Height (Bordeaux, 25 months)",
+                    "Height (Bordeaux, 85 months)",
+                    "Mean bud burst date (Bordeaux)",
+                    "Mean duration of bud burst (Bordeaux)",
+                    "Specific Leaf Area (Fundão)",
+                    d13c)
+trait.colors <- c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9")
+trait.shapes <- c(16,16,16,16, 17,17,15,15)
+```
 
 # Running and saving the models
 
 > Function to download and format the data
 
 ```{r FunctionDownloadFormatData,eval=F}
-DownloadData <- function(trait,sub){
+DownloadData <- function(trait){
 
 #### Trait transformations
     # Phenology-realted traits and delta13C are centered to help convergence
@@ -189,34 +206,9 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
   }
   
   
-########################################################################################################################
-# Option to keep only populations represented by at least 4 clones & clones represented by at least 4 individuals.
-  if(sub=="sub1"|sub=="sub2"){
-
-  ClonesToKeep <- df %>% 
-    dplyr::select(prov,clon) %>% 
-    group_by(clon) %>% 
-    mutate(NbInd = n()) %>% 
-    distinct() %>%
-    filter(NbInd>sub.ind)
-  
-  df <- df %>% semi_join(ClonesToKeep, by="clon") 
-  
-  PopsToKeep <- df %>%  
-    dplyr::select(prov,clon) %>% 
-    distinct() %>%  
-    group_by(prov) %>%  
-    dplyr::summarise(NbClones=n()) %>% 
-    filter(NbClones>sub.clones)
-  
-  df <- df %>% semi_join(PopsToKeep, by="prov") 
-  }
-########################################################################################################################
-    
-
 # the list for stan:
 
-  list.stan <- list(N=length(df$tree),
+list.stan <- list(N=length(df$tree),
          y=df$trait,
          nprov = length(unique(df$prov)),
          nclon = length(unique(df$clon)),
@@ -229,37 +221,17 @@ if(trait=="MeanBB"|trait=="MeanDBB"|trait=="d13C"){
 ```
 
 ```{r RunModel,eval=F}
-########################################
-# Running the models on a filtered dataset or not? (modification after the first round of review in Heredity)
-sub = "no" # if the dataset is not filtered.
-
-### Two filtered datasets:
-
-# Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-sub = "sub1"
-sub.clones = 3
-sub.ind = 3
-
-# Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-sub = "sub2"
-sub.clones = 10
-sub.ind = 6
-########################################
-
-if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
-  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
-
-
 list.models <- list()
 
+set.seed(56)
 
 for(trait in traits){
   
-list.trait <- DownloadData(trait,sub)
+stanlist <- DownloadData(trait)
 
 
 list.models[[trait]] <- sampling(model, 
-                               data = list.trait, 
+                               data = stanlist, 
                                pars=c("beta0",
                                       "pi","sigma2_r","sigma2_block","sigma2_prov","sigma2_clon",
                                       "H2",
@@ -273,20 +245,15 @@ list.models[[trait]] <- sampling(model,
                                control=list(max_treedepth=12))
 }
 
-if(sub=="sub1"){
-saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel_sub1.rds"))} else if (sub=="sub2"){
-saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel_sub2.rds"))} else {
-saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel.rds"))}
-}
+
+saveRDS(list.models,file=paste0("outputs/models/StandardQuantGenModel.rds"))
 ```
 
+# Figures
+
+## Broad-sense heritability $H^2$
 
 ```{r StandardQuantGenModelH2,fig.height=6,fig.width=8}
-sub="no"
-# I only made the script for sub="no"
-if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
-  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
-
 post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
   mclapply(function(x) broom::tidyMCMC(x,pars=("H2"),
               droppars = NULL, 
@@ -295,139 +262,69 @@ post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>%
               rhat = F, 
               conf.int = T,
               conf.level = conf.level)) %>% 
-  bind_rows() %>% 
-  mutate(Traits=traits)
+  bind_rows(.id="Traits")  %>% 
+  mutate(Traits=factor(Traits,levels=traits))
+
 
 # Table for the Supplementary Information:
-post %>% dplyr::select(Traits,estimate,conf.low,conf.high) %>% kable(digits=3,"latex")
+post %>% 
+  dplyr::select(Traits,estimate,conf.low,conf.high) %>% 
+  xtable(type = "latex",digits=3) %>% 
+  print(file = paste0("tables/HeritabilityEstimates_StandardQuantitativeGeneticModel.tex"), 
+      include.rownames=FALSE)
 
-traits.order.fig <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
-post$Traits <- as.factor(post$Traits)
-post$Traits <- factor(post$Traits,levels=rev(c(traits.order.fig)))
 
-d13c <- parse(text = TeX("$\\delta^{13}C$"))
-
-p <- post  %>%   ggplot(aes(x=term,y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
+p <- post  %>%   
+  ggplot(aes(x=term,y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
   ylab(TeX("$H^{2}$ estimates")) + xlab("") +
-  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
-                                "Height (Bordeaux, 25 months)",
-                                "Height (Portugal, 20 months)",
-                                "Height (Asturias, 21 months)",
-                                "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)), #
-                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
-  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
-                                "Height (Bordeaux, 25 months)",
-                                "Height (Portugal, 20 months)",
-                                "Height (Asturias, 21 months)",
-                                "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)),
-                     values = c(15, 15,17, 17,16,16,16,16)) +
+  scale_colour_manual(labels = trait.labels,
+                     values = trait.colors) +
+  scale_shape_manual(labels = trait.labels,
+                     values = trait.shapes) +
   theme_bw() +
   theme(axis.text.x = element_blank(),
         axis.text.y = element_text(size=16),
         axis.title = element_text(size=16),
-      legend.title=element_text(size=13), 
-      legend.text=element_text(size=10),
-      axis.ticks.x = element_blank(),
-      legend.background = element_rect(colour = "grey"),
-      legend.position = c(.18, .77),
-      strip.text.x = element_blank(),
-      panel.grid.minor.x=element_blank(),
-      panel.grid.major.x=element_blank()) +
-    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
-
-p
+        legend.title=element_text(size=13), 
+        legend.text=element_text(size=10),
+        axis.ticks.x = element_blank(),
+        strip.text.x = element_blank(),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank()) +
+  guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
 
 ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_BroadSenseHeritability.png",height=6,width=8)
-```
 
+# Another possible visualisation:
 
+# p <- post  %>%   
+#   ggplot(aes(x=estimate,y = Traits,colour=Traits,shape=Traits)) +
+#   geom_point(size=4) + # 
+#   geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),height=0.1,size=1,show.legend = c(size = TRUE)) +
+#   xlab(TeX("$H^{2}$ estimates")) + ylab("") +
+#   scale_y_discrete() +
+#   scale_colour_manual(values=trait.colors) +
+#   scale_shape_manual(values = trait.shapes) +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(size=16),
+#         axis.text.y = element_text(size=16),
+#         axis.title = element_text(size=16),
+#       legend.title=element_text(size=13), 
+#       legend.text=element_text(size=10),
+#       axis.ticks.x = element_blank(),
+#       legend.position = "none",
+#       strip.text.x = element_blank(),
+#       panel.grid.minor.y=element_blank(),
+#       panel.grid.major.y=element_blank()) +
+#     guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
 
-```{r StandardQuantGenModelH2V2,fig.height=6,fig.width=8}
-sub="no"
-# I only made the script for sub="no"
-if(sub=="sub2"){traits <- c("BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB")} else {
-  traits <- c("POR_htoct12","BDX_htnov13","BDX_htnov18","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")}
-
-post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
-  mclapply(function(x) broom::tidyMCMC(x,pars=("H2"),
-              droppars = NULL, 
-              estimate.method = point.est, 
-              ess = F, 
-              rhat = F, 
-              conf.int = T,
-              conf.level = conf.level)) %>% 
-  bind_rows() %>% 
-  mutate(Traits=traits)
-
-# Table for the Supplementary Information:
-post %>% dplyr::select(Traits,estimate,conf.low,conf.high) %>% kable(digits=3,"latex")
-
-traits.order.fig <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
-post$Traits <- as.factor(post$Traits)
-post$Traits <- factor(post$Traits,levels=rev(c(traits.order.fig)))
-
-
-p <- post  %>%   
-  ggplot(aes(x=estimate,y = Traits,colour=Traits,shape=Traits)) +
-  geom_point(size=4) + # 
-  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),height=0.1,size=1,show.legend = c(size = TRUE)) +
-  xlab(TeX("$H^{2}$ estimates")) + ylab("") +
-  
-  scale_y_discrete(labels=c("BDX_htnov18"="Height (Bordeaux, 85 months)",
-                            "BDX_htnov13"="Height (Bordeaux, 25 months)",
-                            "POR_htoct12"="Height (Portugal, 20 months)",
-                            "AST_htnov12"="Height (Asturias, 21 months)",
-                            "MeanBB"="Mean bud burst date (Bordeaux)",
-                            "MeanDBB"="Mean duration of bud burst (Bordeaux)",
-                            "POR_SLA"="Specific Leaf Area (Portugal)",
-                            "d13C"=parse(text = TeX("$\\delta^{13}C$ (Portugal)"))
-                            )) +
-  
-  
-  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
-                                "Height (Bordeaux, 25 months)",
-                                "Height (Portugal, 20 months)",
-                                "Height (Asturias, 21 months)",
-                                "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)), #
-                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
-  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
-                                "Height (Bordeaux, 25 months)",
-                                "Height (Portugal, 20 months)",
-                                "Height (Asturias, 21 months)",
-                                "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)),
-                     values = c(15, 15,17, 17,16,16,16,16)) +
-  theme_bw() +
-  theme(axis.text.x = element_text(size=16),
-        axis.text.y = element_text(size=16),
-        axis.title = element_text(size=16),
-      legend.title=element_text(size=13), 
-      legend.text=element_text(size=10),
-      axis.ticks.x = element_blank(),
-      legend.position = "none",
-      strip.text.x = element_blank(),
-      panel.grid.minor.y=element_blank(),
-      panel.grid.major.y=element_blank()) +
-    guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
+# ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_BroadSenseHeritability_V2.png",height=8,width=14)
 
 p
-
-ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_BroadSenseHeritability_V2.png",height=8,width=14)
 ```
 
-
+## Variance partitioning
 
 ```{r StandardQuantGenModelPI,fig.height=8,fig.width=12}
 post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>% 
@@ -437,51 +334,32 @@ post <- readRDS(file=paste0("outputs/models/StandardQuantGenModel.rds"))  %>%
               ess = F, 
               rhat = F, 
               conf.int = T,
-              conf.level = conf.level) %>% dplyr::mutate(pi=c("Residuals","Blocks","Populations","Clones"))) %>% 
-  bind_rows() %>% 
-  mutate(Traits=sapply(traits,function(x) rep(x,4),simplify = T) %>% as.vector())
-
-traits.order.fig <- c("BDX_htnov18","BDX_htnov13","POR_htoct12","AST_htnov12","MeanBB","MeanDBB","POR_SLA","d13C")
-post$Traits <- as.factor(post$Traits)
-post$Traits <- factor(post$Traits,levels=rev(c(traits.order.fig)))
-
-d13c <- parse(text = TeX("$\\delta^{13}C$"))
+              conf.level = conf.level) %>% 
+             dplyr::mutate(pi=c("Residuals","Blocks","Populations","Clones"))) %>% 
+  bind_rows(.id="Traits") %>% 
+  mutate(Traits=factor(Traits,levels=traits)) %>% 
+  mutate(pi=factor(pi,levels=c("Blocks","Populations","Clones","Residuals")))
+  
 
 p <- post  %>%   ggplot(aes(x = pi, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits,shape=Traits)) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=2.5,size=3,show.legend = c(size = TRUE)) +
   ylab(TeX("Proportion of variance explained")) + xlab("") +
-  scale_colour_manual(labels = rev(c("Height (Bordeaux, 85 months)",
-                                "Height (Bordeaux, 25 months)",
-                                "Height (Portugal, 20 months)",
-                                "Height (Asturias, 21 months)",
-                                "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)), # 
-                     values=rev(c("#B2182B","#D73027","#F46D43", "#FDAE61","#5AAE61","#A6DBA0" ,"#4575B4", "#ABD9E9"))) +
-  scale_shape_manual(labels = rev(c("Height (Bordeaux, 85 months)",
-                                "Height (Bordeaux, 25 months)",
-                                "Height (Portugal, 20 months)",
-                                "Height (Asturias, 21 months)",
-                                "Mean bud burst date",
-                                "Mean duration of bud burst",
-                                "Specific Leaf Area",
-                                d13c)),
-                     values = c(15, 15,17, 17,16,16,16,16)) +
+  scale_colour_manual(labels=trait.labels,
+                      values=trait.colors) +
+  scale_shape_manual(labels=trait.labels,
+                     values = trait.shapes) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
         axis.text.y = element_text(size=16),
         axis.title = element_text(size=16),
-      legend.title=element_text(size=13), 
-      legend.position = c(0.22,0.88),
-      legend.text=element_text(size=10),
-      legend.background = element_rect(colour = "grey"),
-      strip.text.x = element_text(size = 14),
-      panel.grid.minor.x=element_blank(),
-      panel.grid.major.x=element_blank()) +
-    guides(color=guide_legend(ncol=2,override.aes = list(size=2)))
-p
+        legend.title=element_text(size=13), 
+        legend.text=element_text(size=10),
+        strip.text.x = element_text(size = 14),
+        panel.grid.minor.x=element_blank(),
+        panel.grid.major.x=element_blank()) +
+  guides(color=guide_legend(ncol=1,override.aes = list(size=2)))
 
 ggsave(p,file="figs/PosteriorDistributions/StandardQuantGenModel_VariancePartitioning.png",height=8,width=12)
+p
 ```
 
