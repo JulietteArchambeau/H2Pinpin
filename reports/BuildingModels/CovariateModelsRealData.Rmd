@@ -408,8 +408,8 @@ PlotParam <- function(x){
   facet_grid(.~fct_relevel(Hyp,"Admixture","Climate harshness","Temporal heterogeneity","Spatial heterogeneity"),
              scales="free", space = "free") + 
   ylab(TeX(yaxis.label)) + xlab("") +
-  scale_colour_manual(values = trait.colors) +
-  scale_shape_manual(values = trait.shapes) +
+  scale_colour_manual(values = trait.colors,labels=trait.labels) +
+  scale_shape_manual(values = trait.shapes,labels=trait.labels) +
   theme_bw() +
   theme(axis.text.x = element_text(size=13),
         axis.text.y = element_text(size=16),
@@ -465,9 +465,9 @@ set.seed(444)
 # sub.ind = 3
 
 # Subset 1: only populations represented by at least 4 clones and clones represented by at least 4 individuals.
-sub = "sub2"
-sub.clones = 10
-sub.ind = 6
+# sub = "sub2"
+# sub.clones = 10
+# sub.ind = 6
 ########################################
 
 # Dataset in which the potential drivers are
@@ -550,9 +550,9 @@ For each of the eight trait, we ran eight models, one for each potential driver:
 ```{r RunModel,eval=F}
 for(trait in traits){
 
-if(sub=="sub2"|sub=="sub1"){
+if(sub=="sub2"){
 stanlist.drivers <- DownloadData(trait,sub,drivers=selected.drivers)
-} else if(sub=="alldata"){
+} else if(sub=="alldata"|sub=="sub1"){
 stanlist.drivers <- DownloadData(trait,sub,drivers)
 }
 
@@ -646,12 +646,12 @@ df.betaX <- mclapply(traits,ExtractParam) %>%
          Traits=factor(Traits,levels=c(traits)))
 
 
-if(sub=="sub2"){width.png.selected.drivers=15} else {
+if(sub=="sub2"){width.png.selected.drivers=17} else {
   width.png.selected.drivers=18}
 
 
 # Generating the plot with all drivers
-PlotParam(df.betaX) %>% ggsave(file = paste0("figs/PosteriorDistributions/AllTestedDrivers_",sub,".png"),width=28,height=12)
+if(sub=="sub1"|sub=="alldata"){PlotParam(df.betaX) %>% ggsave(file = paste0("figs/PosteriorDistributions/AllTestedDrivers_",sub,".png"),width=28,height=12)}
 
 # Generating the plot with only the selected drivers
 df.betaX %>% 
@@ -1796,8 +1796,9 @@ p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>%
     broom::tidyMCMC(x,pars=("pi"),
                 droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
   bind_rows(.id="Drivers") %>% 
-  mutate(prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon","sigma_site","sigma_GE"),length(selected.drivers))) %>% 
-  mutate(prop.var=factor(prop.var, levels=c("sigma_site","sigma_block","sigma_GE","sigma_prov","mean_sigma_clon","sigma_r"))) %>%
+  mutate(prop.var=rep(c("Residuals","Blocks","Populations","Clones","Sites","Sites*Clones"),length(selected.drivers))) %>% 
+  mutate(prop.var=factor(prop.var, 
+                         levels=c("Sites","Blocks","Sites*Clones","Populations","Clones","Residuals"))) %>%
   mutate(Drivers=factor(Drivers,levels=selected.drivers)) %>% 
   ggplot(aes(x = prop.var, y = estimate,ymin = conf.low, ymax = conf.high,color=Drivers)) +
   geom_pointinterval(position = position_dodge(width = .8),point_size=3,alpha=0.6,size=5) +
@@ -1806,11 +1807,6 @@ p <- readRDS(file=paste0("outputs/models/HeightGE.rds")) %>%
   xlab("") +
   ylab("Proportion of variance explained") +
   labs(color = "Potential drivers") +
-  scale_x_discrete(labels=c("Sites","Blocks",
-                            "Sites*Clones",
-                            "Populations","Clones",
-                            "Residuals"
-                            )) +
   theme(axis.text = element_text(size=25),
         panel.grid.minor.x=element_blank(),
         panel.grid.major.x=element_blank())  +
