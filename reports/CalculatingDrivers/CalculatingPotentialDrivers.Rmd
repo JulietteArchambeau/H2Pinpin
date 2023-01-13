@@ -100,7 +100,7 @@ To obtain the climate harhness indexes, we calculated the mean over of period 19
   
   - $bio14$ is the precipitation of the driest month.
   
-  - $MSP$ is the mean summer precipitation.
+  - $SP$ is the summer precipitation.
   
   
 ## Environmental spatial heterogeneity indexes
@@ -115,7 +115,7 @@ The climatic data were extracted from raster files at 1kmx1km spatial resolution
   
       - $SHM$: summer heat moisture index (°C/mm)
   
-      - $MSP$: mean summer precipitation (mm) (named $PRCsum$ in the raster files)
+      - $SP$: summer precipitation (mm) (named $PRCsum$ in the raster files and $MSP$ in ClimateDT)
   
       - $SPR$: mean spring precipitation (mm)
   
@@ -814,7 +814,7 @@ dev.off()
   
   - $SHM$: Summer heat moisture index (°C/mm)
   
-  - $PRCsum$: Mean summer precipitation (mm) ($MSP$ in the manuscript and in ClimateDT)
+  - $PRCsum$: Mean summer precipitation (mm) ($SP$ in the manuscript and in ClimateDT)
   
   - $SPR$: Mean spring precipitation (mm)
   
@@ -941,8 +941,8 @@ We **perform a PCA** on the selected cell values = cell in forested areas and in
 ```{r RunPCA, fig.height=10,fig.width=10}
 tab <- readRDS(file="data/DF_EnvHetero.rds")
 
-# We rename PRCsum to MSP (to have the same variable names in the paper)
-tab <- tab %>% dplyr::rename(MSP=PRCsum)
+# We rename PRCsum to SP (to have the same variable names in the paper)
+tab <- tab %>% dplyr::rename(SP=PRCsum, SpringP=SPR)
 
 pca <- prcomp(tab[,-1], center = TRUE, scale. = TRUE) # centered and scaled PCA
 
@@ -1713,7 +1713,7 @@ climDT <- read.csv("data/Climate/Raw/ClimateDTdownloads/ClimateDT_outputs.csv") 
                    mean_EMT=mean(EMT),     # extreme minimum temperature
                    mean_bio14=mean(bio14), # precipitation of the driest month
                    mean_SHM=mean(SHM),     # summer heat moisture index
-                   mean_MSP=mean(MSP),     # mean summer precipitation
+                   mean_MSP=mean(MSP),     # summer precipitation (called mean summer prec in ClimateDT)
                    
                    var_bio6=var(bio6),
                    var_MCMT=var(MCMT),
@@ -1871,7 +1871,7 @@ MCMT_height_asturias <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="
 MSP_height_asturias <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="asturias","MSP"]) # mean across 2011 and 2012 
 
 # Height (Fundão, 20 months) + SLA + d13C
-MCMT_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","MCMT"]) # mean across 2011 and 2012 
+MCMT_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","MCMT"]) # mean across 2011 and 2012
 MSP_height_SLA_d13C_portugal <- mean(df.site[df.site$Year %in% 2011:2012 & df.site$ID=="portugal","MSP"]) # mean across 2011 and 2012                         
 
 # Height (Bordeaux, 25 months)
@@ -1879,7 +1879,7 @@ MCMT_height_bordeaux25 <- mean(df.site[df.site$Year %in% 2011:2013 & df.site$ID=
 MSP_height_bordeaux25 <- mean(df.site[df.site$Year %in% 2012:2013 & df.site$ID=="bordeaux","MSP"]) # mean across 2012 and 2013 (were not planted during the 2011 summer)                       
 # Height (Bordeaux, 85 months)
 MCMT_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2011:2018 & df.site$ID=="bordeaux","MCMT"]) # mean from 2011 to 2018
-MSP_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2012:2018 & df.site$ID=="bordeaux","MSP"]) # mean from 2011 to 2018
+MSP_height_bordeaux85 <- mean(df.site[df.site$Year %in% 2012:2018 & df.site$ID=="bordeaux","MSP"]) # mean from 2012 to 2018
 
 # Mean bud burst date (Bordeaux)
 MCMT_meanBB_bordeaux <- mean(df.site[df.site$Year %in% c(2013:2015,2017) & df.site$ID=="bordeaux","MCMT"]) # mean across years 2013, 2014, 2015 and 2017
@@ -1904,7 +1904,6 @@ df <- df %>%
                 CTD_MCMT_meanDBB_bordeaux=(mean_MCMT-MCMT_meanDBB_bordeaux) %>% abs(),
                 CTD_MSP_meanDBB_bordeaux=(mean_MSP-MSP_meanDBB_bordeaux) %>% abs())
                 
-
 df %>% 
   dplyr::select(prov,contains("CTD")) %>% 
   kable(digits=2) %>%
@@ -1920,6 +1919,44 @@ df %>%
                 bootstrap_options = c("striped","hover", "condensed"), full_width = F) %>%
   column_spec(1, bold = T)
 ```
+
+```{r}
+climcc <- tibble("Common gardens"=c("Asturias",
+                                    "Fundão",
+                                    "Bordeaux",
+                                    "Bordeaux",
+                                    "Bordeaux",
+                                    "Bordeaux"),
+                 "Traits"=c("Height (21 months)",
+                            "Height (20 months), SLA, d13C",
+                            "Height (25 months)",
+                            "Height (85 months)",
+                            "Mean bud burst date",
+                            "Mean duration of bud burst"),
+                 "Years included"=c("2011,2012",
+                                    "2011,2012",
+                                    "2011 (MCMT only),2012,2013",
+                                    "2011 (MCMT only), 2012 to 2018",
+                                    "2013, 2014, 2015 and 2017",
+                                    "2014, 2015 and 2017"),
+                 "MCMT"=c(MCMT_height_asturias,
+                        MCMT_height_SLA_d13C_portugal,
+                        MCMT_height_bordeaux25,
+                        MCMT_height_bordeaux85,
+                        MCMT_meanBB_bordeaux,
+                        MCMT_meanDBB_bordeaux),
+                 "SP"=c(MSP_height_asturias,
+                      MSP_height_SLA_d13C_portugal,
+                      MSP_height_bordeaux25,
+                      MSP_height_bordeaux85,
+                      MSP_meanBB_bordeaux,
+                      MSP_meanDBB_bordeaux))
+
+print(xtable(climcc, type = "latex",digits=3),
+      file = "tables/Drivers/ClimateCommonGardens.tex",
+      include.rownames=FALSE)
+```
+
 
 # Export drivers
 

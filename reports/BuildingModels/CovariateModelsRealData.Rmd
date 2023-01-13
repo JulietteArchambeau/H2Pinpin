@@ -484,8 +484,8 @@ selected.drivers <- c("A","D",
                       "SH.20km.PC1","SH.20km.PC2","SH.1km.PC1","SH.1km.PC2")
 
 selected.drivers.labels <- c("A","D",
-                             "mean(MCMT)","mean(MSP)",
-                             "var(MCMT)","var(MSP)",
+                             "mean(MCMT)","mean(SP)",
+                             "var(MCMT)","var(SP)",
                              "SH1[20km]","SH2[20km]","SH1[1.6km]","SH2[1.6km]")
 
 # Downloading and scaling (mean-centering) the potential drivers
@@ -608,13 +608,13 @@ df.betaX <- mclapply(traits,ExtractParam) %>%
                       Drivers=="mean_MCMT"~"mean(MCMT)",
                       Drivers=="mean_EMT"~"mean(EMT)",
                       Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="mean_MSP"~"mean(MSP)",
+                      Drivers=="mean_MSP"~"mean(SP)",
                       Drivers=="mean_SHM"~"mean(SHM)",
                       Drivers=="var_bio6"~"var(bio6)",
                       Drivers=="var_MCMT"~"var(MCMT)",
                       Drivers=="var_EMT"~"var(EMT)",
                       Drivers=="var_bio14"~"var(bio14)",
-                      Drivers=="var_MSP"~"var(MSP)",
+                      Drivers=="var_MSP"~"var(SP)",
                       Drivers=="var_SHM"~"var(SHM)",
                       TRUE ~ as.character(Drivers)),
          Hyp=case_when(Drivers=="A"~"Admixture",
@@ -628,13 +628,13 @@ df.betaX <- mclapply(traits,ExtractParam) %>%
                        Drivers=="mean(EMT)"~"Climate harshness",
                        Drivers=="mean(bio14)"~"Climate harshness",
                        Drivers=="mean(SHM)"~"Climate harshness",
-                       Drivers=="mean(MSP)"~"Climate harshness",
+                       Drivers=="mean(SP)"~"Climate harshness",
                        Drivers=="var(bio6)"~"Temporal heterogeneity",
                        Drivers=="var(MCMT)"~"Temporal heterogeneity",
                        Drivers=="var(EMT)"~"Temporal heterogeneity",
                        Drivers=="var(bio14)"~"Temporal heterogeneity",
                        Drivers=="var(SHM)"~"Temporal heterogeneity",
-                       Drivers=="var(MSP)"~"Temporal heterogeneity"),
+                       Drivers=="var(SP)"~"Temporal heterogeneity"),
          TraitType=case_when(Traits=="POR_htoct12"~"Morphological",
                              Traits=="BDX_htnov13"~"Morphological",
                              Traits=="AST_htnov12"~"Morphological",
@@ -715,9 +715,9 @@ p <- ExtractPopSpecificParam(trait) %>%
     Drivers=="SH.1km.PC1" ~ "SH1[1.6km]",
     Drivers=="SH.1km.PC2" ~ "SH2[1.6km]",
     Drivers=="mean_MCMT" ~ "mean(MCMT)",
-    Drivers=="mean_MSP" ~ "mean(MSP)",
+    Drivers=="mean_MSP" ~ "mean(SP)",
     Drivers=="var_MCMT" ~ "var(MCMT)",
-    Drivers=="var_MSP" ~ "var(MSP)",
+    Drivers=="var_MSP" ~ "var(SP)",
     Drivers=="A" ~ "A",
     Drivers=="D" ~ "D"))
 
@@ -748,9 +748,9 @@ readRDS(file=paste0("outputs/models/",x,"_",sub,".rds")) %>%
     Drivers=="SH.1km.PC1" ~ "SH1[1.6km]",
     Drivers=="SH.1km.PC2" ~ "SH2[1.6km]",
     Drivers=="mean_MCMT" ~ "mean(MCMT)",
-    Drivers=="mean_MSP" ~ "mean(MSP)",
+    Drivers=="mean_MSP" ~ "mean(SP)",
     Drivers=="var_MCMT" ~ "var(MCMT)",
-    Drivers=="var_MSP" ~ "var(MSP)",
+    Drivers=="var_MSP" ~ "var(SP)",
     Drivers=="A" ~ "A",
     Drivers=="D" ~ "D")) %>% 
   pivot_wider(names_from = term,values_from=c(estimate,conf.low,conf.high))})
@@ -885,9 +885,9 @@ p <- ExtractParam(trait) %>%
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
                       Drivers=="SH.1km.PC2"~"SH2[1.6km]",
                       Drivers=="mean_MCMT" ~ "mean(MCMT)",
-                      Drivers=="mean_MSP" ~ "mean(MSP)",
+                      Drivers=="mean_MSP" ~ "mean(SP)",
                       Drivers=="var_MCMT" ~ "var(MCMT)",
-                      Drivers=="var_MSP" ~ "var(MSP)",
+                      Drivers=="var_MSP" ~ "var(SP)",
                       TRUE ~ as.character(Drivers)),
          prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),length(selected.drivers))) %>% 
   mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r")),
@@ -928,9 +928,9 @@ plots <- mclapply(heights, function(trait){
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
                       Drivers=="SH.1km.PC2"~"SH2[1.6km]",
                       Drivers=="mean_MCMT" ~ "mean(MCMT)",
-                      Drivers=="mean_MSP" ~ "mean(MSP)",
+                      Drivers=="mean_MSP" ~ "mean(SP)",
                       Drivers=="var_MCMT" ~ "var(MCMT)",
-                      Drivers=="var_MSP" ~ "var(MSP)",
+                      Drivers=="var_MSP" ~ "var(SP)",
                       TRUE ~ as.character(Drivers)),
          prop.var=rep(c("sigma_r","sigma_block","sigma_prov","mean_sigma_clon"),length(selected.drivers))) %>% 
   mutate(prop.var=factor(prop.var,levels=c("sigma_block","sigma_prov","mean_sigma_clon","sigma_r")),
@@ -1004,9 +1004,9 @@ p <- traits %>%
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
                       Drivers=="SH.1km.PC2"~"SH2[1.6km]",
                       Drivers=="mean_MCMT" ~ "mean(MCMT)",
-                      Drivers=="mean_MSP" ~ "mean(MSP)",
+                      Drivers=="mean_MSP" ~ "mean(SP)",
                       Drivers=="var_MCMT" ~ "var(MCMT)",
-                      Drivers=="var_MSP" ~ "var(MSP)",
+                      Drivers=="var_MSP" ~ "var(SP)",
                       TRUE ~ as.character(Drivers)),
          Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
   ggplot(aes(x = trait.names, y = estimate,
@@ -1032,7 +1032,7 @@ p <- traits %>%
       panel.grid.major.x=element_blank()) +
     guides(color=guide_legend(ncol=2))
   
-  ggsave(p, file=paste0("figs/PosteriorDistributions/ALLTRAITS_",param,"_",sub,".png"),height=7,width=13)
+  ggsave(p, file=paste0("figs/PosteriorDistributions/",param,"_",sub,".png"),height=7,width=13)
 }
 ```
 
@@ -1137,7 +1137,7 @@ saveRDS(CTDbetaX,file=paste0("outputs/models/CTDbetaX.rds"))
 CTDbetaX <- readRDS(file=paste0("outputs/models/CTDbetaX.rds")) %>% 
   bind_rows(.id="Traits") %>%
   mutate(Drivers=case_when(str_detect(driver,"MCMT")==TRUE ~ paste0("CTD(",str_sub(driver,5,8),")"),
-                           str_detect(driver,"MSP")==TRUE ~ paste0("CTD(",str_sub(driver,5,7),")")),
+                           str_detect(driver,"MSP")==TRUE ~ paste0("CTD(",str_sub(driver,6,7),")")),
          Traits=factor(Traits,levels=traits))
 
 

@@ -138,8 +138,8 @@ selected.drivers <- c("A","D",
                       "SH.20km.PC1","SH.20km.PC2","SH.1km.PC1","SH.1km.PC2")
 
 selected.drivers.labels <- c("A","D",
-                             "mean(MCMT)","mean(MSP)",
-                             "var(MCMT)","var(MSP)",
+                             "mean(MCMT)","mean(SP)",
+                             "var(MCMT)","var(SP)",
                              "SH1[20km]","SH2[20km]","SH1[1.6km]","SH2[1.6km]")
 
 selected.drivers.colors <- c("#4D9221" ,"#7FBC41", "#C51B7D" ,"#DE77AE",
@@ -438,13 +438,13 @@ p <- mclapply(traits,ExtractParam) %>%
                       Drivers=="mean_MCMT"~"mean(MCMT)",
                       Drivers=="mean_EMT"~"mean(EMT)",
                       Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="mean_MSP"~"mean(MSP)",
+                      Drivers=="mean_MSP"~"mean(SP)",
                       Drivers=="mean_SHM"~"mean(SHM)",
                       Drivers=="var_bio6"~"var(bio6)",
                       Drivers=="var_MCMT"~"var(MCMT)",
                       Drivers=="var_EMT"~"var(EMT)",
                       Drivers=="var_bio14"~"var(bio14)",
-                      Drivers=="var_MSP"~"var(MSP)",
+                      Drivers=="var_MSP"~"var(SP)",
                       Drivers=="var_SHM"~"var(SHM)",
                       TRUE ~ as.character(Drivers)),
          Hyp=case_when(Drivers=="A"~"Admixture",
@@ -458,13 +458,13 @@ p <- mclapply(traits,ExtractParam) %>%
                        Drivers=="mean(EMT)"~"Climate harshness",
                        Drivers=="mean(bio14)"~"Climate harshness",
                        Drivers=="mean(SHM)"~"Climate harshness",
-                       Drivers=="mean(MSP)"~"Climate harshness",
+                       Drivers=="mean(SP)"~"Climate harshness",
                        Drivers=="var(bio6)"~"Temporal heterogeneity",
                        Drivers=="var(MCMT)"~"Temporal heterogeneity",
                        Drivers=="var(EMT)"~"Temporal heterogeneity",
                        Drivers=="var(bio14)"~"Temporal heterogeneity",
                        Drivers=="var(SHM)"~"Temporal heterogeneity",
-                       Drivers=="var(MSP)"~"Temporal heterogeneity")) %>% 
+                       Drivers=="var(SP)"~"Temporal heterogeneity")) %>% 
   dplyr::mutate(Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
   ggplot(aes(x = Drivers, y = estimate,ymin = conf.low, ymax = conf.high,colour=Traits),shape=16) +
   geom_pointinterval(position = position_dodge(width = .6),point_size=3,show.legend = c(size = TRUE),size=4) +
@@ -494,8 +494,6 @@ ggsave(p, file="figs/PosteriorDistributions/ValidationStep_BetaX_PaperFig.png",h
 ## Additive genetic variances $\sigma^{2}_{A_{p}}$
 
 ```{r SigmaA,eval=F}
-
-
 mclapply(traits,function(trait){
 
 p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %>% 
@@ -518,13 +516,13 @@ p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %
                       Drivers=="mean_MCMT"~"mean(MCMT)",
                       Drivers=="mean_EMT"~"mean(EMT)",
                       Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="mean_MSP"~"mean(MSP)",
+                      Drivers=="mean_MSP"~"mean(SP)",
                       Drivers=="mean_SHM"~"mean(SHM)",
                       Drivers=="var_bio6"~"var(bio6)",
                       Drivers=="var_MCMT"~"var(MCMT)",
                       Drivers=="var_EMT"~"var(EMT)",
                       Drivers=="var_bio14"~"var(bio14)",
-                      Drivers=="var_MSP"~"var(MSP)",
+                      Drivers=="var_MSP"~"var(SP)",
                       Drivers=="var_SHM"~"var(SHM)",
                       TRUE ~ as.character(Drivers))) %>% 
   dplyr::mutate(Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
@@ -574,13 +572,13 @@ p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %
                       Drivers=="mean_MCMT"~"mean(MCMT)",
                       Drivers=="mean_EMT"~"mean(EMT)",
                       Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="mean_MSP"~"mean(MSP)",
+                      Drivers=="mean_MSP"~"mean(SP)",
                       Drivers=="mean_SHM"~"mean(SHM)",
                       Drivers=="var_bio6"~"var(bio6)",
                       Drivers=="var_MCMT"~"var(MCMT)",
                       Drivers=="var_EMT"~"var(EMT)",
                       Drivers=="var_bio14"~"var(bio14)",
-                      Drivers=="var_MSP"~"var(MSP)",
+                      Drivers=="var_MSP"~"var(SP)",
                       Drivers=="var_SHM"~"var(SHM)",
                       TRUE ~ as.character(Drivers))) %>% 
   dplyr::mutate(Drivers=factor(Drivers,levels=selected.drivers.labels)) %>% 
@@ -620,13 +618,13 @@ p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %
                       Drivers=="mean_MCMT"~"mean(MCMT)",
                       Drivers=="mean_EMT"~"mean(EMT)",
                       Drivers=="mean_bio14"~"mean(bio14)",
-                      Drivers=="mean_MSP"~"mean(MSP)",
+                      Drivers=="mean_MSP"~"mean(SP)",
                       Drivers=="mean_SHM"~"mean(SHM)",
                       Drivers=="var_bio6"~"var(bio6)",
                       Drivers=="var_MCMT"~"var(MCMT)",
                       Drivers=="var_EMT"~"var(EMT)",
                       Drivers=="var_bio14"~"var(bio14)",
-                      Drivers=="var_MSP"~"var(MSP)",
+                      Drivers=="var_MSP"~"var(SP)",
                       Drivers=="var_SHM"~"var(SHM)",
                       TRUE ~ as.character(Drivers))) %>% 
   mutate(prop.var=factor(prop.var,levels=c("Blocks","Populations","Clones","Residuals"))) %>%
