@@ -1,6 +1,6 @@
 ---
-title: "Validation step with height data from a progeny test near Asturias"
-subtitle: "Associating within-population additive genetic variance with the eight potential drivers"
+title: "Validation analysis in a family-based progeny test"
+subtitle: "Associating within-population additive genetic variance for height and SLA with the potential drivers"
 author: "Juliette Archambeau"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: 
@@ -56,6 +56,7 @@ library(tidyverse)    # CRAN v1.3.0
 library(kableExtra)   # CRAN v1.1.0
 library(rstan)        # CRAN v2.19.2
 library(broom)        # CRAN v0.5.2
+library(broom.mixed)
 library(loo)          # CRAN v2.2.0
 library(latex2exp)    # CRAN v0.4.0
 library(parallel)
@@ -73,12 +74,17 @@ options(mc.cores = parallel::detectCores())
 ```
 
 
+# Introduction
+
+In this document, we estimate the association between the within-population quantitative additive genetic variation and the ten potential drivers for three phenotypic traits: height measured the 17/12/2007 (when the trees were 3-year old), height measured in 2010 (when the trees were 6-year old) and SLA measured in 2009 (when the trees were 5-year old).
+
 
 # Load the progeny test data
 
 ```{r LoadData, warning=F,message=F}
 # Load the progeny test data
-data <- read_excel("data/ProgenyTests/F26SNP_d130809_20120515.xls", sheet = 2) %>% # the spreadsheet 2 correspond to measurement in Cavada (Asturias common garden)
+# The spreadsheet 2 corresponds to measurement in Cavada (Asturias common garden)
+data <- read_excel("data/ProgenyTests/F26SNP_d130809_20120515.xls", sheet = 2) %>% 
   drop_na(Prov_code) # we remove the four rows at the end of the file that have NAs for id, prov id, site...
 
 # Provenance names in the progeny tests:
@@ -117,18 +123,18 @@ Dataset of `r dim(data)[1]` observations.
 # Options and parameters
 
 ```{r Option}
-# Options for sampling
+# Options for model sampling
 n_chains <- 4
 n_iter <- 2500
 n_warm <- 1250
 n_thin <- 1
 save_warmup = FALSE 
 
+# Plot theme
 theme_set(theme_bw(base_size = 20))
 
 # option for the MCMC intervals
 point.est="median"
-
 conf.level <- 0.95
 ```
 
@@ -147,38 +153,41 @@ selected.drivers.colors <- c("#4D9221" ,"#7FBC41", "#C51B7D" ,"#DE77AE",
                               "#2D004B","#542788" ,"#8073AC" ,"#B2ABD2")
 
 
-provs <- unique(data$Prov_code_clonapin) %>% str_sort()
+
 
 # "HT07" => Height measurement in 2007 (3-year old)
 # "HT10" => Height measurement in 2010 (6-year old)
-traits <- c("HT07","HT10")
+# "SLA_09" => Height measurement in 2009 (5-year old)
+traits <- c("HT07","HT10", "SLA_09")
 
-trait.options <- list("HT07"=list(x.label.histogram="Height at 3-year old"),
-                      "HT10"=list(x.label.histogram= "Height at 6-year old"))
+trait.options <- list("HT07"=list(x.label.histogram="Height at 3-year old",
+                                  provs = unique(data$Prov_code_clonapin) %>% str_sort()),
+                      "HT10"=list(x.label.histogram= "Height at 6-year old",
+                                  provs = unique(data$Prov_code_clonapin) %>% str_sort()),
+                      "SLA_09"=list(x.label.histogram= "Specific Leaf Area at 5-year old"))
 ```
 
 
-# Height distribution - exploratory analyses
+# Trait distribution - exploratory analyses
 
-We performed these analysis for height measured the 17/12/2007 (when the trees were 3-year old) and height measured in 2010 (when the trees were 6-year old).
+## Filtering 
 
 ```{r WhichTrait,message=F}
-# remove NAs for the trait of interest
+# remove NAs for the traits of interest
 subdata.traits <- mclapply(traits,function(trait){
   data %>% 
   drop_na(all_of(trait)) %>% 
   mutate(Family.id=paste0(Prov_code_clonapin,"_",Fam)) %>% 
-  dplyr::select("Prov_code_clonapin","Prov_code","ID","Fam","Family.id","Block",trait) %>% 
+  dplyr::select("Prov_code_clonapin","Prov_code","ID","Fam","Family.id","Block",all_of(trait)) %>% 
   rename(Trait=trait)
 }) %>% setNames(traits)
-
 ```
 
 ```{r HistogramWithZero,fig.height=6,fig.width=14}
 hists <- mclapply(traits,function(trait){
   subdata.traits[[trait]] %>%
     ggplot(aes(x=Trait)) +
-  geom_histogram(binwidth = 10, fill="seagreen3",alpha=0.7) +
+  geom_histogram(bins = 30, fill="seagreen3",alpha=0.7) +
   theme_bw() +
   labs(x=trait.options[[trait]]$x.label.histogram,y="Number of trees") +
   theme(axis.text = element_text(size=15),
@@ -186,16 +195,41 @@ hists <- mclapply(traits,function(trait){
     
 })
 hists[[2]] <- hists[[2]] + ylab("")
-plot_grid(hists[[1]],hists[[2]],nrow=1)
+hists[[3]] <- hists[[3]] + ylab("")
+plot_grid(hists[[1]],hists[[2]],hists[[3]],nrow=1)
 ```
 
-We have to remove the zeros because they may represent dead individuals.
+For height, we remove the zeros because they may represent dead individuals. And for SLA, we remove the outlier with SLA = `r max(subdata.traits[[3]]$Trait) %>% round(2)` because it is likely to be a measurement error.
 
-```{r RemovingZeros}
+```{r RemovingZerosOutliers}
+# removing zeros for height
 subdata.traits <- mclapply(traits,function(trait){
 subdata.traits[[trait]] <- subdata.traits[[trait]] %>% filter(!(Trait==0)) # removing zeros
   }) %>% setNames(traits)
+
+# removing one outlier for SLA
+subdata.traits[["SLA_09"]] <- subdata.traits[["SLA_09"]] %>% 
+  filter(Trait < 70)
 ```
+
+
+FOr SLA, we also remove the populations SEG and SAL as they have only 1 family in which SLA was measured.
+
+```{r RemovingSEGandSALforSLA}
+subdata.traits[["SLA_09"]] %>% 
+  group_by(Prov_code_clonapin) %>% 
+  dplyr::summarise(n_families = n_distinct(Family.id),
+            n_individuals = n())
+
+subdata.traits[["SLA_09"]] <- subdata.traits[["SLA_09"]] %>% 
+  filter(!Prov_code_clonapin %in% c("SEG", "SAL"))
+
+# prov ID for SLA
+trait.options$SLA_09$provs <- subdata.traits[["SLA_09"]] %>% distinct(Prov_code_clonapin) %>% as_vector() %>%  str_sort()
+```
+
+
+
 
 Let's plot it again:
 
@@ -203,7 +237,7 @@ Let's plot it again:
 hists <- mclapply(traits,function(trait){
 subdata.traits[[trait]] %>% 
     ggplot(aes(x=Trait)) + 
-  geom_histogram(binwidth = 10, fill="seagreen3",alpha=0.7) +  
+  geom_histogram(bins = 30, fill="seagreen3",alpha=0.7) +  
   theme_bw() + 
   labs(x=trait.options[[trait]]$x.label.histogram,y="Number of trees") +
   theme(axis.title = element_text(size=15),
@@ -211,28 +245,34 @@ subdata.traits[[trait]] %>%
 })
 
 hists[[2]] <- hists[[2]] + ylab("")
-hists <- plot_grid(hists[[1]],hists[[2]],nrow=1)
+hists[[3]] <- hists[[3]] + ylab("")
+hists <- plot_grid(hists[[1]],hists[[2]],hists[[3]],nrow=1)
 
+# Figure provided in the Supplementary Information
 ggsave(hists,
        file = paste0("figs/ExploratoryAnalyses/ValidationStep_Histograms.png"),height=6,width=14)
 
 hists
 ```
 
-```{r HistogramWithoutZerosPopSpecific, fig.height=10, fig.width=20}
+As the traits have close to normal distribution, we do not tranform them prior to analyses.
+
+```{r HistogramWithoutZerosPopSpecific, fig.height=15, fig.width=12}
 hists <- mclapply(traits,function(trait){
 subdata.traits[[trait]] %>% 
     ggplot(aes(x=Trait)) + 
   geom_histogram(fill="seagreen3",alpha=0.7) + 
   theme_bw()  +
-  facet_wrap(~as.factor(Prov_code_clonapin)) + 
+  facet_wrap(~as.factor(Prov_code_clonapin), nrow=3) + 
   labs(x="",y="",title=trait.options[[trait]]$x.label.histogram) +
   theme(axis.text.x = element_text(size=6),
         axis.text.y = element_text(size=12)) })
 
-hists <- plot_grid(hists[[1]],hists[[2]],nrow=1)
+hists <- plot_grid(hists[[1]],hists[[2]],hists[[3]],ncol=1)
+
+# Figure provided in the Supplementary Information
 ggsave(hists,
-       file = paste0("figs/ExploratoryAnalyses/ValidationStep_Histograms_PopSpecific.png"),height=10,width=20)
+       file = paste0("figs/ExploratoryAnalyses/ValidationStep_Histograms_PopSpecific.png"),height=15,width=12)
 hists
 ```
 
@@ -417,7 +457,7 @@ param <- "betaX"
 
 ExtractParam <- function(x)  {
   readRDS(file=paste0("outputs/models/",x,"_ProgenyTestsAsturias.rds")) %>% 
-  mclapply(function(x) broom::tidyMCMC(x,pars=param,
+  mclapply(function(x) broom.mixed::tidyMCMC(x,pars=param,
                 droppars = NULL, 
                 estimate.method = point.est, 
                 ess = F, 
@@ -470,20 +510,20 @@ p <- mclapply(traits,ExtractParam) %>%
   geom_pointinterval(position = position_dodge(width = .6),point_size=3,show.legend = c(size = TRUE),size=4) +
   facet_grid(.~Hyp,scales="free", space = "free") + 
   ylab(TeX("$\\beta_{X}$ estimates")) + xlab("") +
-  scale_colour_manual(labels = c("Height (3-year old)","Height (6-year old)"), 
-                      values=c("#FDAE61","#B2182B")) +
+  scale_colour_manual(labels = c("Height (3-year old)","Height (6-year old)","Specific Leaf Area (5-year old)"), 
+                      values=c("#FDAE61","#B2182B","royalblue3")) +
   theme_bw() +
   theme(axis.text.x = element_text(size=10),
         axis.text.y = element_text(size=16),
         axis.title = element_text(size=16),
       legend.title=element_text(size=13), 
       legend.text=element_text(size=10),
-      legend.position = c(.4, .09), #.414
+      legend.position = c(.12, .12), #.414
       legend.background = element_rect(colour = "grey"),
       strip.text.x = element_text(size = 14),
       panel.grid.minor.x=element_blank(),
       panel.grid.major.x=element_blank()) +
-    guides(color=guide_legend(ncol=2))
+    guides(color=guide_legend(ncol=1))
 
 p
 ggsave(p, file="figs/PosteriorDistributions/ValidationStep_BetaX_PaperFig.png",height=6.5,width=13)
@@ -498,7 +538,7 @@ mclapply(traits,function(trait){
 
 p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %>% 
   mclapply(function(driver) {
-    broom::tidyMCMC(driver,pars=("sigma2_A"),
+    broom.mixed::tidyMCMC(driver,pars=("sigma2_A"),
                 droppars = NULL, 
                 estimate.method = point.est, 
                 ess = F, 
@@ -507,7 +547,7 @@ p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %
                 conf.level = conf.level)}) %>%  
   bind_rows(.id="Drivers") %>% 
   mutate(Traits=trait,
-         prov=rep(provs,length(selected.drivers.labels)),
+         prov=rep(trait.options[[trait]]$provs,length(selected.drivers.labels)),
          Drivers=case_when(Drivers=="SH.20km.PC1"~"SH1[20km]",
                       Drivers=="SH.20km.PC2"~"SH2[20km]",
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
@@ -554,7 +594,7 @@ mclapply(traits,function(trait){
 
 p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %>% 
   mclapply(function(driver) {
-    broom::tidyMCMC(driver,pars=("h2_prov"),
+    broom.mixed::tidyMCMC(driver,pars=("h2_prov"),
                 droppars = NULL, 
                 estimate.method = point.est, 
                 ess = F, 
@@ -563,7 +603,7 @@ p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %
                 conf.level = conf.level)}) %>%  
   bind_rows(.id="Drivers") %>% 
   mutate(Traits=trait,
-         prov=rep(provs,length(selected.drivers.labels)),
+         prov=rep(trait.options[[trait]]$provs,length(selected.drivers.labels)),
          Drivers=case_when(Drivers=="SH.20km.PC1"~"SH1[20km]",
                       Drivers=="SH.20km.PC2"~"SH2[20km]",
                       Drivers=="SH.1km.PC1"~"SH1[1.6km]",
@@ -605,7 +645,7 @@ ggsave(p,file=paste0("figs/PosteriorDistributions/ValidationStep_",trait,"_h2pro
 mclapply(traits,function(trait){
 p <- readRDS(file=paste0("outputs/models/",trait,"_ProgenyTestsAsturias.rds")) %>% 
   mclapply(function(driver) {
-    broom::tidyMCMC(driver,pars=("pi"),
+    broom.mixed::tidyMCMC(driver,pars=("pi"),
                 droppars = NULL, estimate.method = point.est, ess = F, rhat = F, conf.int = T,conf.level = 0.95)}) %>%  
   bind_rows(.id="Drivers") %>% 
   mutate(Traits=trait,
