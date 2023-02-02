@@ -1977,7 +1977,7 @@ dfcor <- df %>%
                 SH.20km.PC1,SH.20km.PC2,
                 SH.1km.PC1,SH.1km.PC2) %>% 
   cor() %>% 
-  lower.triangle()
+  matrixcalc::lower.triangle()
 
 dfcor %>% 
   kable(digits=3) %>%
