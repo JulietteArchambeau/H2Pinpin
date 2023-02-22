@@ -14,7 +14,7 @@ How evolutionary forces interact to maintain genetic variation within population
 
 **Analyses:**
 
-Below, you can find the `html` corresponding to the `.md` files in the folder `/reports/`:
+Below, you can find the `html` corresponding to the `.Rmd` files in the folder `/reports/`:
 
 1. In the subfolder `ExplanatoryAnalyses`: 
 
@@ -23,18 +23,18 @@ Below, you can find the `html` corresponding to the `.md` files in the folder `/
     
 2. In the subfolder `CalculatingDrivers`:
 
-    - [Calculating eight potential drivers of the within-population genetic variation](https://juliettearchambeau.github.io/H2Pinpin/CalculatingPotentialDrivers.html)
+    - [Calculating potential drivers of the within-population genetic variation](https://juliettearchambeau.github.io/H2Pinpin/CalculatingPotentialDrivers.html)
 
 
 3. In the subfolder `BuildingModels`:
 
-    - [Bayesian analysis to associate within-population genetic variation with potential underlying drivers - Real data](https://juliettearchambeau.github.io/H2Pinpin/CovariateModelsRealData.html)
+    - [Bayesian analysis to associate within-population genetic variation with potential underlying drivers - Based on real data](https://juliettearchambeau.github.io/H2Pinpin/CovariateModelsRealData.html)
     - [Bayesian analysis to associate within-population genetic variation with potential underlying drivers - Simulations](https://juliettearchambeau.github.io/H2Pinpin/HierarchicalModels_WithPotentialDrivers_SimulatedData.html)
     
     
 4. In the subfolder `CompareAdditiveGenVarProgenyTests`:
 
-    - [Validation analysis in a family-based progeny test](https://juliettearchambeau.github.io/H2Pinpin/CompareAdditiveGenVarProgenyTests.html)
+    - [Validation analysis in a family-based progeny test - Associating within-population additive genetic variation for height and SLA with the potential drivers](https://juliettearchambeau.github.io/H2Pinpin/CompareAdditiveGenVarProgenyTests.html)
     
     
     
