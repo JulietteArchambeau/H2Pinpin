@@ -172,7 +172,7 @@ trait.options <- list("HT07"=list(x.label.histogram="Height at 3-year old",
 
 ## Filtering 
 
-```{r WhichTrait,message=F}
+```{r WhichTrait,message=F, warning=F}
 # remove NAs for the traits of interest
 subdata.traits <- mclapply(traits,function(trait){
   data %>% 
@@ -526,7 +526,12 @@ p <- mclapply(traits,ExtractParam) %>%
     guides(color=guide_legend(ncol=1))
 
 p
+
+# save as png
 ggsave(p, file="figs/PosteriorDistributions/ValidationStep_BetaX_PaperFig.png",height=6.5,width=13)
+
+# save as pdf
+ggsave(p, file="figs/PosteriorDistributions/ValidationStep_BetaX_PaperFig.pdf",height=6.5,width=13)
 ```
 
 
